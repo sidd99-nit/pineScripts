@@ -1,35 +1,37 @@
-/@version=6
+//@version=6
+
 //=====================================================================
-// HOW TO READ THIS CHART
+// 4-YEAR AVWAP VALUE-FOR-MONEY SIP GAUGE
 //=====================================================================
 //
-// This is a pure "value for money" gauge for monthly SIP investing -
-// designed for fundamentally strong stocks / ETFs.
+// FAIR-VALUE POSITION:
 //
-//   - The two thick lines (and the band between them) mark the
-//     4-year AVWAP fair-value zone, built from where price bottomed
-//     in each of the last 4 calendar years.
-//   - The three thinner lines below the band are reference distances
-//     (in weekly ATR) - Zone 1 (mild), Zone 2 (strong), Zone 3
-//     (deep) discounts below fair value.
-//   - The background tint is the actual "value for money" read:
-//     it shades toward green the further price sits below fair
-//     value, and stays neutral/untinted at or above fair value.
-//     Darker green = a better price to buy at this month.
+//   -1.00 = Price is far above the fair-value band
+//    0.00 = Price is inside the fair-value band
+//   +1.00 = Price is at or below Zone 3
 //
-// SIP ALLOCATION (shown in the table):
-//   Recommended % of your planned SIP budget for this ticker =
-//       55% + (Value Score Ã 45%)
-//   â ranges from 55% (expensive) to 100% (deep discount)
-//   Never exceeds 100% of the planned budget.
+// DEFAULT SIP ALLOCATION:
 //
-// Use it on your SIP date: look at the table for the exact %
-// of budget to deploy into that strong stock/ETF this month.
+//   Far above fair value    = 25%
+//   Inside fair value       = 100%
+//   At or below Zone 3      = 200%
+//
+// Example:
+//
+//   If the normal monthly SIP is 10,000:
+//
+//   25%  = 2,500
+//   100% = 10,000
+//   200% = 20,000
+//
+// Important:
+// This is a technical allocation gauge for fundamentally selected
+// stocks and ETFs. It does not calculate fundamental intrinsic value.
 //
 //=====================================================================
 
 indicator(
-     title = "4-Year AVWAP Value-For-Money Zones + SIP %",
+     title = "4-Year AVWAP Fair Value + SIP Allocation",
      shorttitle = "4Y AVWAP SIP",
      overlay = true
 )
@@ -40,7 +42,7 @@ indicator(
 
 string avwapGroup = "1. AVWAP Settings"
 string weightGroup = "2. Recency Weighting"
-string zoneGroup = "3. Reference Zones"
+string zoneGroup = "3. Fair-Value Zones"
 string appearanceGroup = "4. Appearance"
 string sipGroup = "5. SIP Allocation"
 
@@ -91,7 +93,7 @@ float weightThreeYearsAgo = input.float(
 )
 
 //=====================================================================
-// Reference zone settings
+// Zone settings
 //=====================================================================
 
 int weeklyATRLength = input.int(
@@ -103,28 +105,37 @@ int weeklyATRLength = input.int(
 
 float initialZoneATR = input.float(
      0.5,
-     title = "Zone 1 Distance (Mild Discount)",
+     title = "Zone 1 Distance: Mild Discount",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     tooltip = "Distance below the lower fair-value boundary, measured in weekly ATR.",
      group = zoneGroup
 )
 
 float strongZoneATR = input.float(
      1.0,
-     title = "Zone 2 Distance (Strong Discount)",
+     title = "Zone 2 Distance: Strong Discount",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     tooltip = "Distance below the lower fair-value boundary, measured in weekly ATR.",
      group = zoneGroup
 )
 
 float deepZoneATR = input.float(
      1.5,
-     title = "Zone 3 Distance (Deep Discount)",
+     title = "Zone 3 Distance: Deep Discount",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. The background reaches full color intensity at this depth.",
+     tooltip = "Price at or below this distance receives the maximum SIP allocation.",
+     group = zoneGroup
+)
+
+float expensiveZoneATR = input.float(
+     1.5,
+     title = "Far Above Fair-Value Distance",
+     minval = 0.1,
+     step = 0.1,
+     tooltip = "Price this many weekly ATRs above the upper fair-value boundary receives the minimum SIP allocation.",
      group = zoneGroup
 )
 
@@ -146,19 +157,19 @@ bool showEqualWeightComposite = input.bool(
 
 bool showCentralBandFill = input.bool(
      true,
-     title = "Fill Between Both Composites",
+     title = "Fill Fair-Value Band",
      group = appearanceGroup
 )
 
 bool showReferenceZones = input.bool(
      true,
-     title = "Show Zone Reference Lines",
+     title = "Show Discount Zone Lines",
      group = appearanceGroup
 )
 
 bool showWeeklyMA = input.bool(
      true,
-     title = "Show 40-Week Moving Average",
+     title = "Show Weekly Moving Average",
      group = appearanceGroup
 )
 
@@ -171,7 +182,7 @@ int weeklyMALength = input.int(
 
 bool showValueBackground = input.bool(
      true,
-     title = "Show Value-For-Money Background Tint",
+     title = "Show Fair-Value Background Tint",
      group = appearanceGroup
 )
 
@@ -213,21 +224,26 @@ color colorEqualComposite = input.color(
 
 color colorWeeklyMA = input.color(
      color.yellow,
-     title = "40-Week Moving Average",
+     title = "Weekly Moving Average",
      group = appearanceGroup
 )
 
-color colorExpensiveTint = input.color(
+color colorAboveValueTint = input.color(
+     color.new(color.red, 82),
+     title = "Tint Far Above Fair Value",
+     group = appearanceGroup
+)
+
+color colorInsideValueTint = input.color(
      color.new(color.gray, 100),
-     title = "Tint at/above Fair Value",
-     tooltip = "Background color when price is at or above fair value - default is fully transparent (no tint).",
+     title = "Tint Inside Fair Value",
+     tooltip = "Default is fully transparent.",
      group = appearanceGroup
 )
 
-color colorBestValueTint = input.color(
+color colorBelowValueTint = input.color(
      color.new(color.green, 55),
-     title = "Tint at Deepest Discount",
-     tooltip = "Background color once price reaches Zone 3 depth - the strongest 'good value' tint.",
+     title = "Tint at Deep Discount",
      group = appearanceGroup
 )
 
@@ -241,14 +257,14 @@ int individualLineWidth = input.int(
 
 int compositeLineWidth = input.int(
      3,
-     title = "Main Composite Width",
+     title = "Composite Line Width",
      minval = 2,
      maxval = 6,
      group = appearanceGroup
 )
 
 //=====================================================================
-// SIP Allocation settings
+// SIP allocation settings
 //=====================================================================
 
 bool showSipTable = input.bool(
@@ -258,29 +274,44 @@ bool showSipTable = input.bool(
 )
 
 float minSipPct = input.float(
-     55.0,
-     title = "Min SIP % (at Fair Value)",
+     25.0,
+     title = "Minimum SIP % Far Above Fair Value",
      minval = 0.0,
      maxval = 100.0,
-     step = 1.0,
-     tooltip = "Percentage of planned SIP budget to use when price is at or above fair value.",
+     step = 5.0,
+     tooltip = "Allocation when price is at least the configured ATR distance above fair value.",
+     group = sipGroup
+)
+
+float normalSipPct = input.float(
+     100.0,
+     title = "Normal SIP % Inside Fair Value",
+     minval = 0.0,
+     maxval = 200.0,
+     step = 5.0,
+     tooltip = "Allocation while price is inside the fair-value band.",
      group = sipGroup
 )
 
 float maxSipPct = input.float(
-     100.0,
-     title = "Max SIP % (at Deep Discount)",
-     minval = 0.0,
-     maxval = 100.0,
-     step = 1.0,
-     tooltip = "Percentage of planned SIP budget to use at Zone 3 depth. Never exceeds 100%.",
+     200.0,
+     title = "Maximum SIP % at Deep Discount",
+     minval = 100.0,
+     maxval = 500.0,
+     step = 5.0,
+     tooltip = "Allocation when price reaches Zone 3 or falls below it.",
      group = sipGroup
 )
 
 string tablePosition = input.string(
      "Top Right",
      title = "Table Position",
-     options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"],
+     options = [
+         "Top Left",
+         "Top Right",
+         "Bottom Left",
+         "Bottom Right"
+     ],
      group = sipGroup
 )
 
@@ -311,30 +342,33 @@ float previousCumulativeVolume =
      nz(cumulativeVolume[1], 0.0)
 
 //=====================================================================
-// Track each calendar year's running low (causal, no future leakage)
+// Track each calendar year's running low
 //=====================================================================
-
-// Keeps a running lowest-low for whichever calendar year each bar
-// belongs to, updating only with information available at that bar -
-// no request.security lookahead is used anywhere in this script. For
-// completed years the running low freezes at the year's true low
-// once the year ends. For the in-progress year, the anchor can still
-// move forward live as new lows print - that is expected, not
-// repainting, since no future data is ever used.
+//
+// No future annual values or lookahead are used.
+//
+// During an active calendar year, the anchor moves forward when a
+// strictly lower price is recorded.
+//
+//=====================================================================
 
 var float yearRunningLow = na
 
-bool isNewCalendarYear = ta.change(year) != 0
+bool isNewCalendarYear =
+     barstate.isfirst or year != year[1]
+
+bool isRunningYearLow =
+     isNewCalendarYear or
+     na(yearRunningLow) or
+     low < yearRunningLow
 
 if isNewCalendarYear or na(yearRunningLow)
     yearRunningLow := low
-else
-    yearRunningLow := math.min(yearRunningLow, low)
-
-bool isRunningYearLow = low <= yearRunningLow
+else if low < yearRunningLow
+    yearRunningLow := low
 
 //=====================================================================
-// Locate each year's lowest bar
+// Identify the anchor events for each year
 //=====================================================================
 
 bool anchorCurrentYear =
@@ -442,7 +476,8 @@ calculateAVWAP(
      float storedVolume,
      int storedAnchorTime
 ) =>
-    float volumeFromAnchor = cumulativeVolume - storedVolume
+    float volumeFromAnchor =
+         cumulativeVolume - storedVolume
 
     bool validAnchor =
          not na(storedPriceVolume) and
@@ -452,7 +487,8 @@ calculateAVWAP(
          volumeFromAnchor > 0.0
 
     validAnchor
-         ? (cumulativePriceVolume - storedPriceVolume) / volumeFromAnchor
+         ? (cumulativePriceVolume - storedPriceVolume) /
+           volumeFromAnchor
          : na
 
 //=====================================================================
@@ -488,16 +524,24 @@ float avwapThreeYearsAgo = calculateAVWAP(
 //=====================================================================
 
 float activeWeightCurrent =
-     na(avwapCurrentYear) ? 0.0 : weightCurrentYear
+     na(avwapCurrentYear)
+         ? 0.0
+         : weightCurrentYear
 
 float activeWeightPrevious =
-     na(avwapPreviousYear) ? 0.0 : weightPreviousYear
+     na(avwapPreviousYear)
+         ? 0.0
+         : weightPreviousYear
 
 float activeWeightTwoYears =
-     na(avwapTwoYearsAgo) ? 0.0 : weightTwoYearsAgo
+     na(avwapTwoYearsAgo)
+         ? 0.0
+         : weightTwoYearsAgo
 
 float activeWeightThreeYears =
-     na(avwapThreeYearsAgo) ? 0.0 : weightThreeYearsAgo
+     na(avwapThreeYearsAgo)
+         ? 0.0
+         : weightThreeYearsAgo
 
 float activeValueCurrent =
      na(avwapCurrentYear)
@@ -541,16 +585,24 @@ float weightedAverageAVWAP =
 //=====================================================================
 
 float equalValueCurrent =
-     na(avwapCurrentYear) ? 0.0 : avwapCurrentYear
+     na(avwapCurrentYear)
+         ? 0.0
+         : avwapCurrentYear
 
 float equalValuePrevious =
-     na(avwapPreviousYear) ? 0.0 : avwapPreviousYear
+     na(avwapPreviousYear)
+         ? 0.0
+         : avwapPreviousYear
 
 float equalValueTwoYears =
-     na(avwapTwoYearsAgo) ? 0.0 : avwapTwoYearsAgo
+     na(avwapTwoYearsAgo)
+         ? 0.0
+         : avwapTwoYearsAgo
 
 float equalValueThreeYears =
-     na(avwapThreeYearsAgo) ? 0.0 : avwapThreeYearsAgo
+     na(avwapThreeYearsAgo)
+         ? 0.0
+         : avwapThreeYearsAgo
 
 float availableAVWAPCount =
      (na(avwapCurrentYear) ? 0.0 : 1.0) +
@@ -571,15 +623,40 @@ float equalWeightAVWAP =
 //=====================================================================
 // Central fair-value band
 //=====================================================================
+//
+// The technical fair-value band is the area between:
+//
+// 1. The recency-weighted AVWAP composite
+// 2. The equal-weight AVWAP composite
+//
+//=====================================================================
 
 float centralBandUpper =
-     math.max(weightedAverageAVWAP, equalWeightAVWAP)
+     not na(weightedAverageAVWAP) and
+     not na(equalWeightAVWAP)
+         ? math.max(
+             weightedAverageAVWAP,
+             equalWeightAVWAP
+           )
+         : na
 
 float centralBandLower =
-     math.min(weightedAverageAVWAP, equalWeightAVWAP)
+     not na(weightedAverageAVWAP) and
+     not na(equalWeightAVWAP)
+         ? math.min(
+             weightedAverageAVWAP,
+             equalWeightAVWAP
+           )
+         : na
+
+float centralBandMidpoint =
+     not na(centralBandUpper) and
+     not na(centralBandLower)
+         ? (centralBandUpper + centralBandLower) / 2.0
+         : na
 
 //=====================================================================
-// Weekly ATR and weekly moving average
+// Weekly ATR and moving average
 //=====================================================================
 
 float weeklyATR = request.security(
@@ -599,55 +676,202 @@ float weeklyMA = request.security(
 )
 
 //=====================================================================
-// Reference discount-zone lines
+// Discount zones below fair value
 //=====================================================================
 
 float initialAccumulationZone =
-     centralBandLower - weeklyATR * initialZoneATR
-
-float strongAccumulationZone =
-     centralBandLower - weeklyATR * strongZoneATR
-
-float deepAccumulationZone =
-     centralBandLower - weeklyATR * deepZoneATR
-
-//=====================================================================
-// Value-for-money score
-//=====================================================================
-
-// 0.0  = price at or above fair value (no discount)
-// 1.0  = price has fallen exactly to Zone 3 depth (deepest discount)
-// Values are clamped to [0, 1] purely for the background gradient;
-// price can still fall further below Zone 3, it just keeps the
-// strongest tint rather than getting darker still.
-
-float rawDiscountDepth =
-     (not na(weeklyATR) and weeklyATR > 0.0 and not na(centralBandLower))
-         ? (centralBandLower - close) / (weeklyATR * deepZoneATR)
+     not na(centralBandLower) and
+     not na(weeklyATR)
+         ? centralBandLower -
+           weeklyATR * initialZoneATR
          : na
 
-float valueScore =
-     na(rawDiscountDepth)
+float strongAccumulationZone =
+     not na(centralBandLower) and
+     not na(weeklyATR)
+         ? centralBandLower -
+           weeklyATR * strongZoneATR
+         : na
+
+float deepAccumulationZone =
+     not na(centralBandLower) and
+     not na(weeklyATR)
+         ? centralBandLower -
+           weeklyATR * deepZoneATR
+         : na
+
+//=====================================================================
+// Fair-value position
+//=====================================================================
+//
+// -1.0 = Far above fair value
+//  0.0 = Inside fair-value band
+// +1.0 = At or below Zone 3
+//
+// Above and below fair value are measured independently using weekly
+// ATR so the score adjusts to the volatility of each stock.
+//
+//=====================================================================
+
+float aboveFairValueDistance =
+     weeklyATR * expensiveZoneATR
+
+float belowFairValueDistance =
+     weeklyATR * deepZoneATR
+
+float distanceAboveFairValue =
+     not na(centralBandUpper)
+         ? math.max(
+             0.0,
+             close - centralBandUpper
+           )
+         : 0.0
+
+float distanceBelowFairValue =
+     not na(centralBandLower)
+         ? math.max(
+             0.0,
+             centralBandLower - close
+           )
+         : 0.0
+
+float aboveFairValueScore =
+     not na(weeklyATR) and
+     aboveFairValueDistance > 0.0
+         ? math.min(
+             1.0,
+             distanceAboveFairValue /
+             aboveFairValueDistance
+           )
+         : 0.0
+
+float belowFairValueScore =
+     not na(weeklyATR) and
+     belowFairValueDistance > 0.0
+         ? math.min(
+             1.0,
+             distanceBelowFairValue /
+             belowFairValueDistance
+           )
+         : 0.0
+
+float fairValuePosition =
+     na(centralBandUpper) or
+     na(centralBandLower)
          ? 0.0
-         : math.max(0.0, math.min(1.0, rawDiscountDepth))
+         : close > centralBandUpper
+             ? -aboveFairValueScore
+             : close < centralBandLower
+                 ? belowFairValueScore
+                 : 0.0
 
 //=====================================================================
-// SIP recommended percentage (capped at 100%)
+// SIP allocation
+//=====================================================================
+//
+// Above fair value:
+//
+//   Allocation moves from normal SIP toward minimum SIP.
+//
+// Inside fair value:
+//
+//   Allocation remains at normal SIP.
+//
+// Below fair value:
+//
+//   Allocation moves from normal SIP toward maximum SIP.
+//
 //=====================================================================
 
-// Linear: minSipPct + valueScore * (maxSipPct - minSipPct)
-// Default: 55% + valueScore * 45%  â  55% â¦ 100%
+float validatedMinSipPct =
+     math.min(minSipPct, normalSipPct)
 
-float sipRange = math.max(0.0, maxSipPct - minSipPct)
+float validatedNormalSipPct =
+     math.max(
+         validatedMinSipPct,
+         math.min(normalSipPct, maxSipPct)
+     )
+
+float validatedMaxSipPct =
+     math.max(
+         maxSipPct,
+         validatedNormalSipPct
+     )
+
 float recommendedSipPct =
-     math.min(100.0, minSipPct + valueScore * sipRange)
+     fairValuePosition < 0.0
+         ? validatedNormalSipPct -
+           math.abs(fairValuePosition) *
+           (
+               validatedNormalSipPct -
+               validatedMinSipPct
+           )
+         : fairValuePosition > 0.0
+             ? validatedNormalSipPct +
+               fairValuePosition *
+               (
+                   validatedMaxSipPct -
+                   validatedNormalSipPct
+               )
+             : validatedNormalSipPct
+
+recommendedSipPct :=
+     math.max(
+         validatedMinSipPct,
+         math.min(
+             validatedMaxSipPct,
+             recommendedSipPct
+         )
+     )
+
+//=====================================================================
+// Current price zone
+//=====================================================================
+
+string currentZone =
+     na(centralBandUpper) or
+     na(centralBandLower)
+         ? "Insufficient Data"
+         : close > centralBandUpper
+             ? "Above Fair Value"
+             : close >= centralBandLower
+                 ? "Inside Fair Value"
+                 : close > initialAccumulationZone
+                     ? "Below Fair Value"
+                     : close > strongAccumulationZone
+                         ? "Zone 1: Mild Discount"
+                         : close > deepAccumulationZone
+                             ? "Zone 2: Strong Discount"
+                             : "Zone 3: Deep Discount"
+
+//=====================================================================
+// Allocation interpretation
+//=====================================================================
+
+string interpretationText =
+     na(centralBandUpper) or
+     na(centralBandLower)
+         ? "Waiting for sufficient data"
+         : fairValuePosition >= 0.70
+             ? "Deep discount: Maximum allocation"
+             : fairValuePosition >= 0.45
+                 ? "Strong discount: High allocation"
+                 : fairValuePosition > 0.0
+                     ? "Below fair value: Increase allocation"
+                     : fairValuePosition == 0.0
+                         ? "Inside fair value: Normal allocation"
+                         : fairValuePosition > -0.50
+                             ? "Above fair value: Reduce allocation"
+                             : "Far above fair value: Minimum allocation"
 
 //=====================================================================
 // Plot individual yearly AVWAPs
 //=====================================================================
 
 plot(
-     showIndividualAVWAPs ? avwapCurrentYear : na,
+     showIndividualAVWAPs
+         ? avwapCurrentYear
+         : na,
      title = "Current Year Low AVWAP",
      color = colorCurrentYear,
      linewidth = individualLineWidth,
@@ -655,7 +879,9 @@ plot(
 )
 
 plot(
-     showIndividualAVWAPs ? avwapPreviousYear : na,
+     showIndividualAVWAPs
+         ? avwapPreviousYear
+         : na,
      title = "Previous Year Low AVWAP",
      color = colorPreviousYear,
      linewidth = individualLineWidth,
@@ -663,7 +889,9 @@ plot(
 )
 
 plot(
-     showIndividualAVWAPs ? avwapTwoYearsAgo : na,
+     showIndividualAVWAPs
+         ? avwapTwoYearsAgo
+         : na,
      title = "Two Years Ago Low AVWAP",
      color = colorTwoYearsAgo,
      linewidth = individualLineWidth,
@@ -671,7 +899,9 @@ plot(
 )
 
 plot(
-     showIndividualAVWAPs ? avwapThreeYearsAgo : na,
+     showIndividualAVWAPs
+         ? avwapThreeYearsAgo
+         : na,
      title = "Three Years Ago Low AVWAP",
      color = colorThreeYearsAgo,
      linewidth = individualLineWidth,
@@ -679,7 +909,7 @@ plot(
 )
 
 //=====================================================================
-// Plot central composites
+// Plot fair-value composites
 //=====================================================================
 
 weightedCompositePlot = plot(
@@ -691,7 +921,9 @@ weightedCompositePlot = plot(
 )
 
 equalCompositePlot = plot(
-     showEqualWeightComposite ? equalWeightAVWAP : na,
+     showEqualWeightComposite
+         ? equalWeightAVWAP
+         : na,
      title = "Equal-Weight AVWAP Composite",
      color = colorEqualComposite,
      linewidth = 2,
@@ -704,32 +936,51 @@ fill(
      color = showCentralBandFill
          ? color.new(color.blue, 88)
          : na,
-     title = "Central AVWAP Fair-Value Band"
+     title = "Technical Fair-Value Band"
 )
 
 //=====================================================================
-// Plot discount-zone reference lines
+// Plot fair-value midpoint
 //=====================================================================
 
 plot(
-     showReferenceZones ? initialAccumulationZone : na,
-     title = "Zone 1 - Mild Discount",
+     centralBandMidpoint,
+     title = "Fair-Value Midpoint",
+     color = color.new(color.white, 80),
+     linewidth = 1,
+     style = plot.style_linebr,
+     display = display.data_window
+)
+
+//=====================================================================
+// Plot discount zones
+//=====================================================================
+
+plot(
+     showReferenceZones
+         ? initialAccumulationZone
+         : na,
+     title = "Zone 1: Mild Discount",
      color = color.new(color.yellow, 20),
      linewidth = 1,
      style = plot.style_linebr
 )
 
 plot(
-     showReferenceZones ? strongAccumulationZone : na,
-     title = "Zone 2 - Strong Discount",
+     showReferenceZones
+         ? strongAccumulationZone
+         : na,
+     title = "Zone 2: Strong Discount",
      color = color.new(color.orange, 10),
      linewidth = 2,
      style = plot.style_linebr
 )
 
 plot(
-     showReferenceZones ? deepAccumulationZone : na,
-     title = "Zone 3 - Deep Discount",
+     showReferenceZones
+         ? deepAccumulationZone
+         : na,
+     title = "Zone 3: Deep Discount",
      color = color.new(color.red, 5),
      linewidth = 2,
      style = plot.style_linebr
@@ -740,67 +991,241 @@ plot(
 //=====================================================================
 
 plot(
-     showWeeklyMA ? weeklyMA : na,
-     title = "40-Week Moving Average",
+     showWeeklyMA
+         ? weeklyMA
+         : na,
+     title = "Weekly Moving Average",
      color = colorWeeklyMA,
      linewidth = 2
 )
 
 //=====================================================================
-// Value-for-money background tint
+// Fair-value background tint
+//=====================================================================
+//
+// Red tint:   Above fair value
+// No tint:    Inside fair value
+// Green tint: Below fair value
+//
 //=====================================================================
 
 color valueBackground =
-     showValueBackground
-         ? color.from_gradient(valueScore, 0.0, 1.0, colorExpensiveTint, colorBestValueTint)
-         : na
+     not showValueBackground
+         ? na
+         : fairValuePosition < 0.0
+             ? color.from_gradient(
+                 fairValuePosition,
+                 -1.0,
+                 0.0,
+                 colorAboveValueTint,
+                 colorInsideValueTint
+               )
+             : fairValuePosition > 0.0
+                 ? color.from_gradient(
+                     fairValuePosition,
+                     0.0,
+                     1.0,
+                     colorInsideValueTint,
+                     colorBelowValueTint
+                   )
+                 : colorInsideValueTint
 
 bgcolor(
      valueBackground,
-     title = "Value-For-Money Tint"
+     title = "Fair-Value Position Tint"
 )
 
 //=====================================================================
-// SIP Allocation Table
+// Table position
+//=====================================================================
+
+string selectedTablePosition =
+     tablePosition == "Top Left"
+         ? position.top_left
+         : tablePosition == "Top Right"
+             ? position.top_right
+             : tablePosition == "Bottom Left"
+                 ? position.bottom_left
+                 : position.bottom_right
+
+//=====================================================================
+// Table colors
+//=====================================================================
+
+color positionColor =
+     fairValuePosition >= 0.70
+         ? color.lime
+         : fairValuePosition >= 0.20
+             ? color.green
+             : fairValuePosition == 0.0
+                 ? color.yellow
+                 : fairValuePosition > -0.50
+                     ? color.orange
+                     : color.red
+
+color allocationColor =
+     recommendedSipPct >= 175.0
+         ? color.lime
+         : recommendedSipPct >= 125.0
+             ? color.green
+             : recommendedSipPct >= 100.0
+                 ? color.yellow
+                 : recommendedSipPct >= 50.0
+                     ? color.orange
+                     : color.red
+
+//=====================================================================
+// SIP allocation table
 //=====================================================================
 
 var table sipTable = na
 
 if showSipTable and barstate.islast
-    // Determine table position
-    string pos =
-         tablePosition == "Top Left"     ? position.top_left :
-         tablePosition == "Top Right"    ? position.top_right :
-         tablePosition == "Bottom Left"  ? position.bottom_left :
-                                           position.bottom_right
-
     if na(sipTable)
-        sipTable := table.new(pos, 2, 4, bgcolor = color.new(color.black, 15), border_width = 1, border_color = color.gray)
+        sipTable := table.new(
+             selectedTablePosition,
+             2,
+             6,
+             bgcolor = color.new(color.black, 15),
+             border_width = 1,
+             border_color = color.gray
+        )
+
+        table.merge_cells(
+             sipTable,
+             0,
+             0,
+             1,
+             0
+        )
+
+        table.merge_cells(
+             sipTable,
+             0,
+             5,
+             1,
+             5
+        )
 
     // Header
-    table.cell(sipTable, 0, 0, "SIP VALUE GAUGE", text_color = color.white, text_size = size.small, bgcolor = color.new(color.teal, 30))
-    table.cell(sipTable, 1, 0, "", bgcolor = color.new(color.teal, 30))
+    table.cell(
+         sipTable,
+         0,
+         0,
+         "AVWAP SIP VALUE GAUGE",
+         text_color = color.white,
+         text_size = size.small,
+         bgcolor = color.new(color.teal, 30)
+    )
 
-    // Value Score
-    table.cell(sipTable, 0, 1, "Value Score", text_color = color.silver, text_size = size.normal)
-    table.cell(sipTable, 1, 1, str.tostring(valueScore, "#.##"), text_color = color.white, text_size = size.normal)
+    // Fair-value position
+    table.cell(
+         sipTable,
+         0,
+         1,
+         "Fair-Value Position",
+         text_color = color.silver,
+         text_size = size.small,
+         bgcolor = color.new(color.black, 25)
+    )
 
-    // Recommended %
-    color pctColor =
-         recommendedSipPct >= 95 ? color.lime :
-         recommendedSipPct >= 80 ? color.green :
-         recommendedSipPct >= 65 ? color.yellow :
-                                   color.orange
+    table.cell(
+         sipTable,
+         1,
+         1,
+         str.tostring(
+             fairValuePosition,
+             "#.##"
+         ),
+         text_color = positionColor,
+         text_size = size.normal,
+         bgcolor = color.new(color.black, 25)
+    )
 
-    table.cell(sipTable, 0, 2, "Suggested SIP", text_color = color.silver, text_size = size.normal)
-    table.cell(sipTable, 1, 2, str.tostring(recommendedSipPct, "#.#") + "%", text_color = pctColor, text_size = size.large)
+    // Current price
+    table.cell(
+         sipTable,
+         0,
+         2,
+         "Current Price",
+         text_color = color.silver,
+         text_size = size.small,
+         bgcolor = color.new(color.black, 25)
+    )
 
-    // Interpretation line
-    string zoneText =
-         valueScore >= 0.70 ? "Deep Discount â Full amount" :
-         valueScore >= 0.45 ? "Strong Discount â High allocation" :
-         valueScore >= 0.20 ? "Mild Discount â Moderate allocation" :
-                              "Fair / Expensive â Reduced allocation"
+    table.cell(
+         sipTable,
+         1,
+         2,
+         str.tostring(
+             close,
+             format.mintick
+         ),
+         text_color = color.white,
+         text_size = size.normal,
+         bgcolor = color.new(color.black, 25)
+    )
 
-    table.cell(sipTable, 0, 3, zoneText, text_color = color.gray, text_size = size.tiny, bgcolor = color.new(color.black, 40))
-    table.merge_cells(sipTable, 0, 3, 1, 3)
+    // Current zone
+    table.cell(
+         sipTable,
+         0,
+         3,
+         "Current Zone",
+         text_color = color.silver,
+         text_size = size.small,
+         bgcolor = color.new(color.black, 25)
+    )
+
+    table.cell(
+         sipTable,
+         1,
+         3,
+         currentZone,
+         text_color = positionColor,
+         text_size = size.small,
+         bgcolor = color.new(color.black, 25)
+    )
+
+    // Suggested SIP
+    table.cell(
+         sipTable,
+         0,
+         4,
+         "Suggested SIP",
+         text_color = color.silver,
+         text_size = size.normal,
+         bgcolor = color.new(color.black, 25)
+    )
+
+    table.cell(
+         sipTable,
+         1,
+         4,
+         str.tostring(
+             recommendedSipPct,
+             "#.#"
+         ) + "%",
+         text_color = allocationColor,
+         text_size = size.large,
+         bgcolor = color.new(color.black, 25)
+    )
+
+    // Interpretation
+    table.cell(
+         sipTable,
+         0,
+         5,
+         interpretationText,
+         text_color = color.silver,
+         text_size = size.tiny,
+         bgcolor = color.new(color.black, 35)
+    )
+
+//=====================================================================
+// Remove table when disabled
+//=====================================================================
+
+if not showSipTable and not na(sipTable)
+    table.delete(sipTable)
+    sipTable := na
