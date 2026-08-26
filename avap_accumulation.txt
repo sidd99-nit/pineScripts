@@ -1,0 +1,930 @@
+//@version=6
+indicator(
+     title = "4-Year AVWAP Technical Accumulation Zone",
+     shorttitle = "4Y AVWAP Accumulation",
+     overlay = true
+)
+
+//=====================================================================
+// Input groups
+//=====================================================================
+
+string avwapGroup = "1. AVWAP Settings"
+string weightGroup = "2. Recency Weighting"
+string zoneGroup = "3. Accumulation Zones"
+string trendGroup = "4. Trend Filter"
+string signalGroup = "5. Signals"
+string appearanceGroup = "6. Appearance"
+
+//=====================================================================
+// AVWAP settings
+//=====================================================================
+
+float src = input.source(
+     hlc3,
+     title = "VWAP Source",
+     group = avwapGroup
+)
+
+//=====================================================================
+// Recency weights
+//=====================================================================
+
+float weightCurrentYear = input.float(
+     40.0,
+     title = "Current Year Weight",
+     minval = 0.0,
+     step = 1.0,
+     group = weightGroup
+)
+
+float weightPreviousYear = input.float(
+     30.0,
+     title = "Previous Year Weight",
+     minval = 0.0,
+     step = 1.0,
+     group = weightGroup
+)
+
+float weightTwoYearsAgo = input.float(
+     20.0,
+     title = "Two Years Ago Weight",
+     minval = 0.0,
+     step = 1.0,
+     group = weightGroup
+)
+
+float weightThreeYearsAgo = input.float(
+     10.0,
+     title = "Three Years Ago Weight",
+     minval = 0.0,
+     step = 1.0,
+     group = weightGroup
+)
+
+//=====================================================================
+// Accumulation-zone settings
+//=====================================================================
+
+int weeklyATRLength = input.int(
+     14,
+     title = "Weekly ATR Length",
+     minval = 1,
+     group = zoneGroup
+)
+
+float initialZoneATR = input.float(
+     0.5,
+     title = "Initial Accumulation Distance",
+     minval = 0.1,
+     step = 0.1,
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     group = zoneGroup
+)
+
+float strongZoneATR = input.float(
+     1.0,
+     title = "Strong Accumulation Distance",
+     minval = 0.1,
+     step = 0.1,
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     group = zoneGroup
+)
+
+float deepZoneATR = input.float(
+     1.5,
+     title = "Deep Accumulation Distance",
+     minval = 0.1,
+     step = 0.1,
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     group = zoneGroup
+)
+
+float confluenceDistanceATR = input.float(
+     0.5,
+     title = "AVWAP Confluence Distance",
+     minval = 0.1,
+     step = 0.1,
+     tooltip = "An individual AVWAP counts as nearby when it is within this many weekly ATRs of price.",
+     group = zoneGroup
+)
+
+//=====================================================================
+// Trend-filter settings
+//=====================================================================
+
+int weeklyMALength = input.int(
+     40,
+     title = "Weekly Moving Average Length",
+     minval = 1,
+     group = trendGroup
+)
+
+int slopeLookbackWeeks = input.int(
+     4,
+     title = "Composite Slope Lookback",
+     minval = 1,
+     tooltip = "Compares the current composite with its value this many weekly bars ago.",
+     group = trendGroup
+)
+
+bool requireRisingWeeklyMA = input.bool(
+     true,
+     title = "Require Rising 40-Week MA for Normal Signal",
+     group = trendGroup
+)
+
+bool requireStableComposite = input.bool(
+     true,
+     title = "Require Stable or Rising Composite",
+     tooltip = "Prevents signals while the recency-weighted composite is declining sharply.",
+     group = trendGroup
+)
+
+//=====================================================================
+// Signal settings
+//=====================================================================
+
+bool showAccumulationSignals = input.bool(
+     true,
+     title = "Show Accumulation Markers",
+     group = signalGroup
+)
+
+bool requireTwoAVWAPConfluence = input.bool(
+     true,
+     title = "Require at Least Two Nearby AVWAPs",
+     group = signalGroup
+)
+
+bool confirmationOnReclaim = input.bool(
+     true,
+     title = "Use Band Reclaim Confirmation",
+     tooltip = "Signals appear after price closes back above an accumulation band.",
+     group = signalGroup
+)
+
+//=====================================================================
+// Appearance settings
+//=====================================================================
+
+bool showIndividualAVWAPs = input.bool(
+     true,
+     title = "Show Individual AVWAPs",
+     group = appearanceGroup
+)
+
+bool showEqualWeightComposite = input.bool(
+     true,
+     title = "Show Equal-Weight Composite",
+     group = appearanceGroup
+)
+
+bool showCentralBandFill = input.bool(
+     true,
+     title = "Fill Between Both Composites",
+     group = appearanceGroup
+)
+
+bool showATRZones = input.bool(
+     true,
+     title = "Show Weekly ATR Zones",
+     group = appearanceGroup
+)
+
+bool showWeeklyMA = input.bool(
+     true,
+     title = "Show 40-Week Moving Average",
+     group = appearanceGroup
+)
+
+bool colorCompositeBySlope = input.bool(
+     true,
+     title = "Color Main Composite by Slope",
+     group = appearanceGroup
+)
+
+color colorCurrentYear = input.color(
+     color.aqua,
+     title = "Current Year AVWAP",
+     group = appearanceGroup
+)
+
+color colorPreviousYear = input.color(
+     color.blue,
+     title = "Previous Year AVWAP",
+     group = appearanceGroup
+)
+
+color colorTwoYearsAgo = input.color(
+     color.orange,
+     title = "Two Years Ago AVWAP",
+     group = appearanceGroup
+)
+
+color colorThreeYearsAgo = input.color(
+     color.gray,
+     title = "Three Years Ago AVWAP",
+     group = appearanceGroup
+)
+
+color colorRisingComposite = input.color(
+     color.lime,
+     title = "Rising Composite",
+     group = appearanceGroup
+)
+
+color colorFallingComposite = input.color(
+     color.red,
+     title = "Falling Composite",
+     group = appearanceGroup
+)
+
+color colorFlatComposite = input.color(
+     color.fuchsia,
+     title = "Stable Composite",
+     group = appearanceGroup
+)
+
+color colorEqualComposite = input.color(
+     color.blue,
+     title = "Equal-Weight Composite",
+     group = appearanceGroup
+)
+
+color colorWeeklyMA = input.color(
+     color.yellow,
+     title = "40-Week Moving Average",
+     group = appearanceGroup
+)
+
+int individualLineWidth = input.int(
+     1,
+     title = "Individual AVWAP Width",
+     minval = 1,
+     maxval = 4,
+     group = appearanceGroup
+)
+
+int compositeLineWidth = input.int(
+     3,
+     title = "Main Composite Width",
+     minval = 2,
+     maxval = 6,
+     group = appearanceGroup
+)
+
+//=====================================================================
+// Identify latest four calendar years
+//=====================================================================
+
+int latestChartYear = year(last_bar_time)
+
+int currentYear = latestChartYear
+int previousYear = latestChartYear - 1
+int twoYearsAgo = latestChartYear - 2
+int threeYearsAgo = latestChartYear - 3
+
+//=====================================================================
+// Cumulative price-volume calculations
+//=====================================================================
+
+float barVolume = nz(volume, 0.0)
+
+float cumulativePriceVolume = ta.cum(src * barVolume)
+float cumulativeVolume = ta.cum(barVolume)
+
+float previousCumulativePriceVolume =
+     nz(cumulativePriceVolume[1], 0.0)
+
+float previousCumulativeVolume =
+     nz(cumulativeVolume[1], 0.0)
+
+//=====================================================================
+// Calendar-year low
+//=====================================================================
+
+float calendarYearLow = request.security(
+     syminfo.tickerid,
+     "12M",
+     low,
+     gaps = barmerge.gaps_off,
+     lookahead = barmerge.lookahead_on
+)
+
+//=====================================================================
+// Locate each year's lowest bar
+//=====================================================================
+
+bool anchorCurrentYear =
+     year == currentYear and low <= calendarYearLow
+
+bool anchorPreviousYear =
+     year == previousYear and low <= calendarYearLow
+
+bool anchorTwoYearsAgo =
+     year == twoYearsAgo and low <= calendarYearLow
+
+bool anchorThreeYearsAgo =
+     year == threeYearsAgo and low <= calendarYearLow
+
+//=====================================================================
+// Store cumulative price-volume before each anchor
+//=====================================================================
+
+float anchorPriceVolumeCurrent = ta.valuewhen(
+     anchorCurrentYear,
+     previousCumulativePriceVolume,
+     0
+)
+
+float anchorPriceVolumePrevious = ta.valuewhen(
+     anchorPreviousYear,
+     previousCumulativePriceVolume,
+     0
+)
+
+float anchorPriceVolumeTwoYears = ta.valuewhen(
+     anchorTwoYearsAgo,
+     previousCumulativePriceVolume,
+     0
+)
+
+float anchorPriceVolumeThreeYears = ta.valuewhen(
+     anchorThreeYearsAgo,
+     previousCumulativePriceVolume,
+     0
+)
+
+//=====================================================================
+// Store cumulative volume before each anchor
+//=====================================================================
+
+float anchorVolumeCurrent = ta.valuewhen(
+     anchorCurrentYear,
+     previousCumulativeVolume,
+     0
+)
+
+float anchorVolumePrevious = ta.valuewhen(
+     anchorPreviousYear,
+     previousCumulativeVolume,
+     0
+)
+
+float anchorVolumeTwoYears = ta.valuewhen(
+     anchorTwoYearsAgo,
+     previousCumulativeVolume,
+     0
+)
+
+float anchorVolumeThreeYears = ta.valuewhen(
+     anchorThreeYearsAgo,
+     previousCumulativeVolume,
+     0
+)
+
+//=====================================================================
+// Store anchor times
+//=====================================================================
+
+int anchorTimeCurrent = ta.valuewhen(
+     anchorCurrentYear,
+     time,
+     0
+)
+
+int anchorTimePrevious = ta.valuewhen(
+     anchorPreviousYear,
+     time,
+     0
+)
+
+int anchorTimeTwoYears = ta.valuewhen(
+     anchorTwoYearsAgo,
+     time,
+     0
+)
+
+int anchorTimeThreeYears = ta.valuewhen(
+     anchorThreeYearsAgo,
+     time,
+     0
+)
+
+//=====================================================================
+// AVWAP function
+//=====================================================================
+
+calculateAVWAP(
+     float storedPriceVolume,
+     float storedVolume,
+     int storedAnchorTime
+) =>
+    float volumeFromAnchor = cumulativeVolume - storedVolume
+
+    bool validAnchor =
+         not na(storedPriceVolume) and
+         not na(storedVolume) and
+         not na(storedAnchorTime) and
+         time >= storedAnchorTime and
+         volumeFromAnchor > 0.0
+
+    validAnchor
+         ? (cumulativePriceVolume - storedPriceVolume) / volumeFromAnchor
+         : na
+
+//=====================================================================
+// Calculate individual AVWAPs
+//=====================================================================
+
+float avwapCurrentYear = calculateAVWAP(
+     anchorPriceVolumeCurrent,
+     anchorVolumeCurrent,
+     anchorTimeCurrent
+)
+
+float avwapPreviousYear = calculateAVWAP(
+     anchorPriceVolumePrevious,
+     anchorVolumePrevious,
+     anchorTimePrevious
+)
+
+float avwapTwoYearsAgo = calculateAVWAP(
+     anchorPriceVolumeTwoYears,
+     anchorVolumeTwoYears,
+     anchorTimeTwoYears
+)
+
+float avwapThreeYearsAgo = calculateAVWAP(
+     anchorPriceVolumeThreeYears,
+     anchorVolumeThreeYears,
+     anchorTimeThreeYears
+)
+
+//=====================================================================
+// Recency-weighted composite
+//=====================================================================
+
+float activeWeightCurrent =
+     na(avwapCurrentYear) ? 0.0 : weightCurrentYear
+
+float activeWeightPrevious =
+     na(avwapPreviousYear) ? 0.0 : weightPreviousYear
+
+float activeWeightTwoYears =
+     na(avwapTwoYearsAgo) ? 0.0 : weightTwoYearsAgo
+
+float activeWeightThreeYears =
+     na(avwapThreeYearsAgo) ? 0.0 : weightThreeYearsAgo
+
+float activeValueCurrent =
+     na(avwapCurrentYear)
+         ? 0.0
+         : avwapCurrentYear * weightCurrentYear
+
+float activeValuePrevious =
+     na(avwapPreviousYear)
+         ? 0.0
+         : avwapPreviousYear * weightPreviousYear
+
+float activeValueTwoYears =
+     na(avwapTwoYearsAgo)
+         ? 0.0
+         : avwapTwoYearsAgo * weightTwoYearsAgo
+
+float activeValueThreeYears =
+     na(avwapThreeYearsAgo)
+         ? 0.0
+         : avwapThreeYearsAgo * weightThreeYearsAgo
+
+float activeTotalWeight =
+     activeWeightCurrent +
+     activeWeightPrevious +
+     activeWeightTwoYears +
+     activeWeightThreeYears
+
+float activeWeightedSum =
+     activeValueCurrent +
+     activeValuePrevious +
+     activeValueTwoYears +
+     activeValueThreeYears
+
+float weightedAverageAVWAP =
+     activeTotalWeight > 0.0
+         ? activeWeightedSum / activeTotalWeight
+         : na
+
+//=====================================================================
+// Equal-weight composite
+//=====================================================================
+
+float equalValueCurrent =
+     na(avwapCurrentYear) ? 0.0 : avwapCurrentYear
+
+float equalValuePrevious =
+     na(avwapPreviousYear) ? 0.0 : avwapPreviousYear
+
+float equalValueTwoYears =
+     na(avwapTwoYearsAgo) ? 0.0 : avwapTwoYearsAgo
+
+float equalValueThreeYears =
+     na(avwapThreeYearsAgo) ? 0.0 : avwapThreeYearsAgo
+
+float availableAVWAPCount =
+     (na(avwapCurrentYear) ? 0.0 : 1.0) +
+     (na(avwapPreviousYear) ? 0.0 : 1.0) +
+     (na(avwapTwoYearsAgo) ? 0.0 : 1.0) +
+     (na(avwapThreeYearsAgo) ? 0.0 : 1.0)
+
+float equalWeightAVWAP =
+     availableAVWAPCount > 0.0
+         ? (
+             equalValueCurrent +
+             equalValuePrevious +
+             equalValueTwoYears +
+             equalValueThreeYears
+           ) / availableAVWAPCount
+         : na
+
+//=====================================================================
+// Central accumulation band
+//=====================================================================
+
+// The region between the recency-weighted composite and equal-weight
+// composite is treated as the central technical accumulation band.
+
+float centralBandUpper =
+     math.max(weightedAverageAVWAP, equalWeightAVWAP)
+
+float centralBandLower =
+     math.min(weightedAverageAVWAP, equalWeightAVWAP)
+
+float centralBandMidpoint =
+     (centralBandUpper + centralBandLower) / 2.0
+
+//=====================================================================
+// Weekly ATR and weekly moving average
+//=====================================================================
+
+float weeklyATR = request.security(
+     syminfo.tickerid,
+     "W",
+     ta.atr(weeklyATRLength),
+     gaps = barmerge.gaps_off,
+     lookahead = barmerge.lookahead_off
+)
+
+float weeklyMA = request.security(
+     syminfo.tickerid,
+     "W",
+     ta.sma(close, weeklyMALength),
+     gaps = barmerge.gaps_off,
+     lookahead = barmerge.lookahead_off
+)
+
+float weeklyMAPrevious = request.security(
+     syminfo.tickerid,
+     "W",
+     ta.sma(close, weeklyMALength)[1],
+     gaps = barmerge.gaps_off,
+     lookahead = barmerge.lookahead_off
+)
+
+//=====================================================================
+// ATR-based accumulation zones
+//=====================================================================
+
+// Zones are measured underneath the lower edge of the central band.
+
+float initialAccumulationZone =
+     centralBandLower - weeklyATR * initialZoneATR
+
+float strongAccumulationZone =
+     centralBandLower - weeklyATR * strongZoneATR
+
+float deepAccumulationZone =
+     centralBandLower - weeklyATR * deepZoneATR
+
+//=====================================================================
+// Composite and moving-average slopes
+//=====================================================================
+
+float weeklyComposite = request.security(
+     syminfo.tickerid,
+     "W",
+     weightedAverageAVWAP,
+     gaps = barmerge.gaps_off,
+     lookahead = barmerge.lookahead_off
+)
+
+float compositeSlope =
+     weeklyComposite - weeklyComposite[slopeLookbackWeeks]
+
+bool compositeRising = compositeSlope > 0.0
+bool compositeFalling = compositeSlope < 0.0
+bool compositeStable = compositeSlope >= 0.0
+
+bool weeklyMARising =
+     not na(weeklyMAPrevious) and weeklyMA >= weeklyMAPrevious
+
+color mainCompositeColor =
+     not colorCompositeBySlope
+         ? colorFlatComposite
+         : compositeRising
+             ? colorRisingComposite
+             : compositeFalling
+                 ? colorFallingComposite
+                 : colorFlatComposite
+
+//=====================================================================
+// AVWAP confluence count
+//=====================================================================
+
+float confluenceDistance =
+     weeklyATR * confluenceDistanceATR
+
+bool currentAVWAPNearby =
+     not na(avwapCurrentYear) and
+     math.abs(close - avwapCurrentYear) <= confluenceDistance
+
+bool previousAVWAPNearby =
+     not na(avwapPreviousYear) and
+     math.abs(close - avwapPreviousYear) <= confluenceDistance
+
+bool twoYearAVWAPNearby =
+     not na(avwapTwoYearsAgo) and
+     math.abs(close - avwapTwoYearsAgo) <= confluenceDistance
+
+bool threeYearAVWAPNearby =
+     not na(avwapThreeYearsAgo) and
+     math.abs(close - avwapThreeYearsAgo) <= confluenceDistance
+
+int confluenceCount =
+     (currentAVWAPNearby ? 1 : 0) +
+     (previousAVWAPNearby ? 1 : 0) +
+     (twoYearAVWAPNearby ? 1 : 0) +
+     (threeYearAVWAPNearby ? 1 : 0)
+
+bool confluenceCondition =
+     not requireTwoAVWAPConfluence or confluenceCount >= 2
+
+//=====================================================================
+// Technical filters
+//=====================================================================
+
+bool compositeCondition =
+     not requireStableComposite or compositeStable
+
+bool weeklyMACondition =
+     not requireRisingWeeklyMA or weeklyMARising
+
+bool basicTechnicalFilter =
+     compositeCondition and
+     weeklyMACondition and
+     confluenceCondition
+
+//=====================================================================
+// Accumulation signals
+//=====================================================================
+
+// If reclaim confirmation is selected, the signal appears when price
+// crosses back above the relevant band.
+//
+// Otherwise, the signal appears when price trades inside or below it.
+
+bool normalAccumulationSignal =
+     confirmationOnReclaim
+         ? ta.crossover(close, centralBandLower)
+         : close <= centralBandLower and close > initialAccumulationZone
+
+bool initialAccumulationSignal =
+     confirmationOnReclaim
+         ? ta.crossover(close, initialAccumulationZone)
+         : close <= initialAccumulationZone and
+           close > strongAccumulationZone
+
+bool strongAccumulationSignal =
+     confirmationOnReclaim
+         ? ta.crossover(close, strongAccumulationZone)
+         : close <= strongAccumulationZone and
+           close > deepAccumulationZone
+
+bool deepAccumulationSignal =
+     confirmationOnReclaim
+         ? ta.crossover(close, deepAccumulationZone)
+         : close <= deepAccumulationZone
+
+bool showNormalSignal =
+     showAccumulationSignals and
+     normalAccumulationSignal and
+     basicTechnicalFilter
+
+bool showInitialSignal =
+     showAccumulationSignals and
+     initialAccumulationSignal and
+     basicTechnicalFilter
+
+bool showStrongSignal =
+     showAccumulationSignals and
+     strongAccumulationSignal and
+     basicTechnicalFilter
+
+bool showDeepSignal =
+     showAccumulationSignals and
+     deepAccumulationSignal and
+     compositeCondition
+
+//=====================================================================
+// Plot individual yearly AVWAPs
+//=====================================================================
+
+plot(
+     showIndividualAVWAPs ? avwapCurrentYear : na,
+     title = "Current Year Low AVWAP",
+     color = colorCurrentYear,
+     linewidth = individualLineWidth,
+     style = plot.style_linebr
+)
+
+plot(
+     showIndividualAVWAPs ? avwapPreviousYear : na,
+     title = "Previous Year Low AVWAP",
+     color = colorPreviousYear,
+     linewidth = individualLineWidth,
+     style = plot.style_linebr
+)
+
+plot(
+     showIndividualAVWAPs ? avwapTwoYearsAgo : na,
+     title = "Two Years Ago Low AVWAP",
+     color = colorTwoYearsAgo,
+     linewidth = individualLineWidth,
+     style = plot.style_linebr
+)
+
+plot(
+     showIndividualAVWAPs ? avwapThreeYearsAgo : na,
+     title = "Three Years Ago Low AVWAP",
+     color = colorThreeYearsAgo,
+     linewidth = individualLineWidth,
+     style = plot.style_linebr
+)
+
+//=====================================================================
+// Plot central composites
+//=====================================================================
+
+weightedCompositePlot = plot(
+     weightedAverageAVWAP,
+     title = "Recency-Weighted AVWAP Composite",
+     color = mainCompositeColor,
+     linewidth = compositeLineWidth,
+     style = plot.style_linebr
+)
+
+equalCompositePlot = plot(
+     showEqualWeightComposite ? equalWeightAVWAP : na,
+     title = "Equal-Weight AVWAP Composite",
+     color = colorEqualComposite,
+     linewidth = 2,
+     style = plot.style_linebr
+)
+
+fill(
+     weightedCompositePlot,
+     equalCompositePlot,
+     color = showCentralBandFill
+         ? color.new(color.blue, 88)
+         : na,
+     title = "Central AVWAP Accumulation Band"
+)
+
+//=====================================================================
+// Plot ATR accumulation zones
+//=====================================================================
+
+plot(
+     showATRZones ? initialAccumulationZone : na,
+     title = "Initial Accumulation Zone",
+     color = color.new(color.yellow, 20),
+     linewidth = 1,
+     style = plot.style_linebr
+)
+
+plot(
+     showATRZones ? strongAccumulationZone : na,
+     title = "Strong Accumulation Zone",
+     color = color.new(color.orange, 10),
+     linewidth = 2,
+     style = plot.style_linebr
+)
+
+plot(
+     showATRZones ? deepAccumulationZone : na,
+     title = "Deep Accumulation Zone",
+     color = color.new(color.red, 5),
+     linewidth = 2,
+     style = plot.style_linebr
+)
+
+//=====================================================================
+// Plot weekly moving average
+//=====================================================================
+
+plot(
+     showWeeklyMA ? weeklyMA : na,
+     title = "40-Week Moving Average",
+     color = colorWeeklyMA,
+     linewidth = 2
+)
+
+//=====================================================================
+// Plot accumulation markers
+//=====================================================================
+
+plotshape(
+     showNormalSignal,
+     title = "Central Band Reclaim",
+     text = "A1",
+     style = shape.labelup,
+     location = location.belowbar,
+     color = color.new(color.aqua, 0),
+     textcolor = color.black,
+     size = size.tiny
+)
+
+plotshape(
+     showInitialSignal,
+     title = "Initial Zone Reclaim",
+     text = "A2",
+     style = shape.labelup,
+     location = location.belowbar,
+     color = color.new(color.yellow, 0),
+     textcolor = color.black,
+     size = size.tiny
+)
+
+plotshape(
+     showStrongSignal,
+     title = "Strong Zone Reclaim",
+     text = "A3",
+     style = shape.labelup,
+     location = location.belowbar,
+     color = color.new(color.orange, 0),
+     textcolor = color.black,
+     size = size.tiny
+)
+
+plotshape(
+     showDeepSignal,
+     title = "Deep Zone Reclaim",
+     text = "A4",
+     style = shape.labelup,
+     location = location.belowbar,
+     color = color.new(color.red, 0),
+     textcolor = color.white,
+     size = size.tiny
+)
+
+//=====================================================================
+// Optional background for strong AVWAP confluence
+//=====================================================================
+
+color confluenceBackground =
+     confluenceCount >= 3
+         ? color.new(color.teal, 90)
+         : na
+
+bgcolor(
+     confluenceBackground,
+     title = "Strong AVWAP Confluence"
+)
+
+//=====================================================================
+// Alerts
+//=====================================================================
+
+alertcondition(
+     showNormalSignal,
+     title = "Central AVWAP Band Reclaim",
+     message = "Price reclaimed the central AVWAP accumulation band."
+)
+
+alertcondition(
+     showInitialSignal,
+     title = "Initial Accumulation Zone Reclaim",
+     message = "Price reclaimed the initial AVWAP accumulation zone."
+)
+
+alertcondition(
+     showStrongSignal,
+     title = "Strong Accumulation Zone Reclaim",
+     message = "Price reclaimed the strong AVWAP accumulation zone."
+)
+
+alertcondition(
+     showDeepSignal,
+     title = "Deep Accumulation Zone Reclaim",
+     message = "Price reclaimed the deep AVWAP accumulation zone."
+)
