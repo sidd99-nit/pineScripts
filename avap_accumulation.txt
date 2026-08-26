@@ -1,4 +1,42 @@
 //@version=6
+//=====================================================================
+// HOW TO READ THE SIGNALS
+//=====================================================================
+//
+// Each signal fires purely from price location relative to the 4-year
+// AVWAP zones - there is no trend or confluence filter gating them
+// anymore. A signal appears when price dips into a zone below the
+// fair-value band and closes back above it (or, if reclaim
+// confirmation is turned off, the moment price simply trades inside
+// the zone). Think of the four signals as a ladder of discount depth,
+// not a ranking of reliability:
+//
+//   BUY      - price briefly dipped below the fair-value band itself
+//              and reclaimed it. The most common signal - a shallow
+//              dip.
+//
+//   BUY+     - a real pullback (Zone 1, ~0.5x weekly ATR below fair
+//              value) that got bought back up. Moderate discount.
+//
+//   BUY++    - a stronger pullback (Zone 2, ~1x ATR below). Less
+//              frequent, bigger discount.
+//
+//   BUY+++   - a deep, panic-level flush (Zone 3, ~1.5x ATR below)
+//              that got reclaimed. Rare, and historically the best
+//              long-term entry price - but also the scariest to buy
+//              into, since it often happens right when sentiment is
+//              worst.
+//
+// More "+" symbols means a deeper discount, not a more reliable
+// signal - accumulation here is purely a function of how far price
+// has fallen toward (or into) a zone, independent of trend.
+//
+// The 40-week MA trend, composite trend, and AVWAP confluence count
+// are still shown in the status table for context, but as of this
+// version they no longer block or filter any signal.
+//
+//=====================================================================
+
 indicator(
      title = "4-Year AVWAP Long-Term Buy Zones",
      shorttitle = "4Y AVWAP Buy Zones",
@@ -12,7 +50,7 @@ indicator(
 string avwapGroup = "1. AVWAP Settings"
 string weightGroup = "2. Recency Weighting"
 string zoneGroup = "3. Buy Zones (Accumulation)"
-string trendGroup = "4. Trend Filter"
+string infoGroup = "4. Trend Info (display only)"
 string signalGroup = "5. Buy Signals"
 string appearanceGroup = "6. Appearance"
 
@@ -105,19 +143,19 @@ float confluenceDistanceATR = input.float(
      title = "AVWAP Confluence Distance",
      minval = 0.1,
      step = 0.1,
-     tooltip = "An individual yearly AVWAP counts as 'nearby' when price is within this many weekly ATRs of it. More nearby AVWAPs = more years of buyers agreeing on this price = stronger support.",
+     tooltip = "An individual yearly AVWAP counts as 'nearby' when price is within this many weekly ATRs of it. Shown in the status table for context only - no longer required for a signal.",
      group = zoneGroup
 )
 
 //=====================================================================
-// Trend-filter settings
+// Trend info settings (display only - no longer filters signals)
 //=====================================================================
 
 int weeklyMALength = input.int(
      40,
      title = "Weekly Moving Average Length",
      minval = 1,
-     group = trendGroup
+     group = infoGroup
 )
 
 int slopeLookbackWeeks = input.int(
@@ -125,21 +163,7 @@ int slopeLookbackWeeks = input.int(
      title = "Composite Slope Lookback",
      minval = 1,
      tooltip = "Compares the current composite with its value this many weekly bars ago.",
-     group = trendGroup
-)
-
-bool requireRisingWeeklyMA = input.bool(
-     true,
-     title = "Require Rising 40-Week MA for Normal Signal",
-     tooltip = "When on, mild/strong signals only fire in a long-term uptrend, so you're buying dips within a healthy trend rather than catching a falling knife.",
-     group = trendGroup
-)
-
-bool requireStableComposite = input.bool(
-     true,
-     title = "Require Stable or Rising Composite",
-     tooltip = "Prevents signals while the recency-weighted composite is declining sharply.",
-     group = trendGroup
+     group = infoGroup
 )
 
 //=====================================================================
@@ -149,13 +173,7 @@ bool requireStableComposite = input.bool(
 bool showAccumulationSignals = input.bool(
      true,
      title = "Show Buy Signal Markers",
-     tooltip = "Marks potential long-term buying opportunities: price pulling back into an estimated accumulation zone and then reclaiming it. More '+' symbols = a deeper, rarer discount.",
-     group = signalGroup
-)
-
-bool requireTwoAVWAPConfluence = input.bool(
-     true,
-     title = "Require at Least Two Nearby AVWAPs",
+     tooltip = "Marks buying opportunities purely by price location: a pullback into an accumulation zone followed by a reclaim. More '+' symbols = a deeper, rarer discount. No trend filter is applied.",
      group = signalGroup
 )
 
@@ -209,7 +227,7 @@ bool colorCompositeBySlope = input.bool(
 bool showStatusTable = input.bool(
      true,
      title = "Show Status Table",
-     tooltip = "Shows a plain-English summary in the corner of the chart: which zone price is currently in, whether the trend filter is passing, and how many yearly AVWAPs are nearby.",
+     tooltip = "Shows a plain-English summary in the corner of the chart: which zone price is currently in, trend context, and how many yearly AVWAPs are nearby.",
      group = appearanceGroup
 )
 
@@ -313,19 +331,14 @@ float previousCumulativeVolume =
 // Track each calendar year's running low (causal, no future leakage)
 //=====================================================================
 
-// NOTE ON THE FIX: the previous version pulled the *final* low of the
-// current calendar year via request.security(..., "12M", low,
-// lookahead = barmerge.lookahead_on). That setting lets a bar "see"
-// the low of a year before it has actually happened, which silently
-// repaints every current-year signal and made backtests/history look
-// better than real-time trading would. This version never looks
-// forward: it keeps a running lowest-low for whichever calendar year
-// each bar belongs to, updating only with information available at
-// that bar. For completed years the running low simply freezes at the
-// year's true low once the year ends. For the in-progress year, the
-// anchor point can still move forward live as new lows print - that
-// is expected behavior (the AVWAP "follows" the year's lowest point
-// so far), not repainting, since no future data is ever used.
+// This keeps a running lowest-low for whichever calendar year each
+// bar belongs to, updating only with information available at that
+// bar - no request.security lookahead is used anywhere in this
+// script. For completed years the running low freezes at the year's
+// true low once the year ends. For the in-progress year, the anchor
+// can still move forward live as new lows print - that is expected
+// behavior (the AVWAP "follows" the year's lowest point so far), not
+// repainting, since no future data is ever used.
 
 var float yearRunningLow = na
 
@@ -638,7 +651,7 @@ float deepAccumulationZone =
      centralBandLower - weeklyATR * deepZoneATR
 
 //=====================================================================
-// Composite and moving-average slopes
+// Composite and moving-average slopes (display context only)
 //=====================================================================
 
 float weeklyComposite = request.security(
@@ -654,7 +667,6 @@ float compositeSlope =
 
 bool compositeRising = compositeSlope > 0.0
 bool compositeFalling = compositeSlope < 0.0
-bool compositeStable = compositeSlope >= 0.0
 
 bool weeklyMARising =
      not na(weeklyMAPrevious) and weeklyMA >= weeklyMAPrevious
@@ -669,7 +681,7 @@ color mainCompositeColor =
                  : colorFlatComposite
 
 //=====================================================================
-// AVWAP confluence count
+// AVWAP confluence count (display context only)
 //=====================================================================
 
 float confluenceDistance =
@@ -697,26 +709,9 @@ int confluenceCount =
      (twoYearAVWAPNearby ? 1 : 0) +
      (threeYearAVWAPNearby ? 1 : 0)
 
-bool confluenceCondition =
-     not requireTwoAVWAPConfluence or confluenceCount >= 2
-
 //=====================================================================
-// Technical filters
-//=====================================================================
-
-bool compositeCondition =
-     not requireStableComposite or compositeStable
-
-bool weeklyMACondition =
-     not requireRisingWeeklyMA or weeklyMARising
-
-bool basicTechnicalFilter =
-     compositeCondition and
-     weeklyMACondition and
-     confluenceCondition
-
-//=====================================================================
-// Buy signals
+// Buy signals - driven purely by price location relative to zones.
+// No trend, composite, or confluence condition is required anymore.
 //=====================================================================
 
 // If reclaim confirmation is selected, the signal appears when price
@@ -724,13 +719,6 @@ bool basicTechnicalFilter =
 //
 // Otherwise, the signal appears the moment price trades inside or
 // below the zone (earlier, but less confirmed).
-//
-// The deepest zone (Zone 3 / "BUY+++") intentionally ignores the
-// trend and confluence filters and only requires a stable composite.
-// This is deliberate: a genuine panic-level flush is exactly the kind
-// of long-term buying opportunity that a trend filter would otherwise
-// block, since the 40-week MA and confluence count often turn
-// negative right as the best deep-discount entries appear.
 
 bool normalAccumulationSignal =
      confirmationOnReclaim
@@ -755,24 +743,16 @@ bool deepAccumulationSignal =
          : close <= deepAccumulationZone
 
 bool showNormalSignal =
-     showAccumulationSignals and
-     normalAccumulationSignal and
-     basicTechnicalFilter
+     showAccumulationSignals and normalAccumulationSignal
 
 bool showInitialSignal =
-     showAccumulationSignals and
-     initialAccumulationSignal and
-     basicTechnicalFilter
+     showAccumulationSignals and initialAccumulationSignal
 
 bool showStrongSignal =
-     showAccumulationSignals and
-     strongAccumulationSignal and
-     basicTechnicalFilter
+     showAccumulationSignals and strongAccumulationSignal
 
 bool showDeepSignal =
-     showAccumulationSignals and
-     deepAccumulationSignal and
-     compositeCondition
+     showAccumulationSignals and deepAccumulationSignal
 
 //=====================================================================
 // Plot individual yearly AVWAPs
@@ -928,7 +908,7 @@ plotshape(
 )
 
 //=====================================================================
-// Optional background for strong AVWAP confluence
+// Optional background for strong AVWAP confluence (display only)
 //=====================================================================
 
 color confluenceBackground =
@@ -953,7 +933,7 @@ string currentZoneLabel =
      close > deepAccumulationZone ? "Zone 3 - Deep pullback" :
      "Below Zone 3 - Extreme"
 
-string trendStatusLabel = weeklyMARising ? "Rising (healthy)" : "Falling (caution)"
+string trendStatusLabel = weeklyMARising ? "Rising" : "Falling"
 color trendStatusColor = weeklyMARising ? color.lime : color.red
 
 string compositeStatusLabel =
@@ -961,13 +941,10 @@ string compositeStatusLabel =
 color compositeStatusColor =
      compositeRising ? color.lime : compositeFalling ? color.red : color.fuchsia
 
-string filterStatusLabel = basicTechnicalFilter ? "Passing" : "Blocked"
-color filterStatusColor = basicTechnicalFilter ? color.lime : color.gray
-
 var table statusTable = table.new(
      position.top_right,
      2,
-     6,
+     5,
      border_width = 1
 )
 
@@ -978,17 +955,14 @@ if showStatusTable and barstate.islast
     table.cell(statusTable, 0, 1, "Price Zone", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
     table.cell(statusTable, 1, 1, currentZoneLabel, text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
 
-    table.cell(statusTable, 0, 2, "40W MA Trend", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 0, 2, "40W MA Trend (info)", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
     table.cell(statusTable, 1, 2, trendStatusLabel, text_color = trendStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
 
-    table.cell(statusTable, 0, 3, "Composite Trend", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 0, 3, "Composite Trend (info)", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
     table.cell(statusTable, 1, 3, compositeStatusLabel, text_color = compositeStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
 
     table.cell(statusTable, 0, 4, "AVWAP Confluence", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
     table.cell(statusTable, 1, 4, str.tostring(confluenceCount) + " of 4 nearby", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-
-    table.cell(statusTable, 0, 5, "Signal Filter", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-    table.cell(statusTable, 1, 5, filterStatusLabel, text_color = filterStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
 
 //=====================================================================
 // Alerts
