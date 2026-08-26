@@ -1,7 +1,7 @@
 //@version=6
 indicator(
-     title = "4-Year AVWAP Technical Accumulation Zone",
-     shorttitle = "4Y AVWAP Accumulation",
+     title = "4-Year AVWAP Long-Term Buy Zones",
+     shorttitle = "4Y AVWAP Buy Zones",
      overlay = true
 )
 
@@ -11,9 +11,9 @@ indicator(
 
 string avwapGroup = "1. AVWAP Settings"
 string weightGroup = "2. Recency Weighting"
-string zoneGroup = "3. Accumulation Zones"
+string zoneGroup = "3. Buy Zones (Accumulation)"
 string trendGroup = "4. Trend Filter"
-string signalGroup = "5. Signals"
+string signalGroup = "5. Buy Signals"
 string appearanceGroup = "6. Appearance"
 
 //=====================================================================
@@ -75,16 +75,16 @@ int weeklyATRLength = input.int(
 
 float initialZoneATR = input.float(
      0.5,
-     title = "Initial Accumulation Distance",
+     title = "Zone 1 Distance (Mild Pullback)",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. This is the shallowest, most common buy zone.",
      group = zoneGroup
 )
 
 float strongZoneATR = input.float(
      1.0,
-     title = "Strong Accumulation Distance",
+     title = "Zone 2 Distance (Strong Pullback)",
      minval = 0.1,
      step = 0.1,
      tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
@@ -93,10 +93,10 @@ float strongZoneATR = input.float(
 
 float deepZoneATR = input.float(
      1.5,
-     title = "Deep Accumulation Distance",
+     title = "Zone 3 Distance (Deep / Panic Pullback)",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. This is the rarest, deepest discount zone.",
      group = zoneGroup
 )
 
@@ -105,7 +105,7 @@ float confluenceDistanceATR = input.float(
      title = "AVWAP Confluence Distance",
      minval = 0.1,
      step = 0.1,
-     tooltip = "An individual AVWAP counts as nearby when it is within this many weekly ATRs of price.",
+     tooltip = "An individual yearly AVWAP counts as 'nearby' when price is within this many weekly ATRs of it. More nearby AVWAPs = more years of buyers agreeing on this price = stronger support.",
      group = zoneGroup
 )
 
@@ -131,6 +131,7 @@ int slopeLookbackWeeks = input.int(
 bool requireRisingWeeklyMA = input.bool(
      true,
      title = "Require Rising 40-Week MA for Normal Signal",
+     tooltip = "When on, mild/strong signals only fire in a long-term uptrend, so you're buying dips within a healthy trend rather than catching a falling knife.",
      group = trendGroup
 )
 
@@ -147,7 +148,8 @@ bool requireStableComposite = input.bool(
 
 bool showAccumulationSignals = input.bool(
      true,
-     title = "Show Accumulation Markers",
+     title = "Show Buy Signal Markers",
+     tooltip = "Marks potential long-term buying opportunities: price pulling back into an estimated accumulation zone and then reclaiming it. More '+' symbols = a deeper, rarer discount.",
      group = signalGroup
 )
 
@@ -160,7 +162,7 @@ bool requireTwoAVWAPConfluence = input.bool(
 bool confirmationOnReclaim = input.bool(
      true,
      title = "Use Band Reclaim Confirmation",
-     tooltip = "Signals appear after price closes back above an accumulation band.",
+     tooltip = "Signals appear after price closes back above a zone, confirming buyers have stepped back in, rather than the moment price first dips into it.",
      group = signalGroup
 )
 
@@ -201,6 +203,13 @@ bool showWeeklyMA = input.bool(
 bool colorCompositeBySlope = input.bool(
      true,
      title = "Color Main Composite by Slope",
+     group = appearanceGroup
+)
+
+bool showStatusTable = input.bool(
+     true,
+     title = "Show Status Table",
+     tooltip = "Shows a plain-English summary in the corner of the chart: which zone price is currently in, whether the trend filter is passing, and how many yearly AVWAPs are nearby.",
      group = appearanceGroup
 )
 
@@ -301,32 +310,49 @@ float previousCumulativeVolume =
      nz(cumulativeVolume[1], 0.0)
 
 //=====================================================================
-// Calendar-year low
+// Track each calendar year's running low (causal, no future leakage)
 //=====================================================================
 
-float calendarYearLow = request.security(
-     syminfo.tickerid,
-     "12M",
-     low,
-     gaps = barmerge.gaps_off,
-     lookahead = barmerge.lookahead_on
-)
+// NOTE ON THE FIX: the previous version pulled the *final* low of the
+// current calendar year via request.security(..., "12M", low,
+// lookahead = barmerge.lookahead_on). That setting lets a bar "see"
+// the low of a year before it has actually happened, which silently
+// repaints every current-year signal and made backtests/history look
+// better than real-time trading would. This version never looks
+// forward: it keeps a running lowest-low for whichever calendar year
+// each bar belongs to, updating only with information available at
+// that bar. For completed years the running low simply freezes at the
+// year's true low once the year ends. For the in-progress year, the
+// anchor point can still move forward live as new lows print - that
+// is expected behavior (the AVWAP "follows" the year's lowest point
+// so far), not repainting, since no future data is ever used.
+
+var float yearRunningLow = na
+
+bool isNewCalendarYear = ta.change(year) != 0
+
+if isNewCalendarYear or na(yearRunningLow)
+    yearRunningLow := low
+else
+    yearRunningLow := math.min(yearRunningLow, low)
+
+bool isRunningYearLow = low <= yearRunningLow
 
 //=====================================================================
 // Locate each year's lowest bar
 //=====================================================================
 
 bool anchorCurrentYear =
-     year == currentYear and low <= calendarYearLow
+     year == currentYear and isRunningYearLow
 
 bool anchorPreviousYear =
-     year == previousYear and low <= calendarYearLow
+     year == previousYear and isRunningYearLow
 
 bool anchorTwoYearsAgo =
-     year == twoYearsAgo and low <= calendarYearLow
+     year == twoYearsAgo and isRunningYearLow
 
 bool anchorThreeYearsAgo =
-     year == threeYearsAgo and low <= calendarYearLow
+     year == threeYearsAgo and isRunningYearLow
 
 //=====================================================================
 // Store cumulative price-volume before each anchor
@@ -552,7 +578,9 @@ float equalWeightAVWAP =
 //=====================================================================
 
 // The region between the recency-weighted composite and equal-weight
-// composite is treated as the central technical accumulation band.
+// composite is treated as the central "fair value" band. Price above
+// this band is trading rich relative to 4 years of accumulated buying;
+// price below it is where buy zones 1-3 are measured from.
 
 float centralBandUpper =
      math.max(weightedAverageAVWAP, equalWeightAVWAP)
@@ -592,10 +620,13 @@ float weeklyMAPrevious = request.security(
 )
 
 //=====================================================================
-// ATR-based accumulation zones
+// ATR-based accumulation ("buy") zones
 //=====================================================================
 
 // Zones are measured underneath the lower edge of the central band.
+// Zone 1 = mild pullback, Zone 2 = strong pullback, Zone 3 = deep /
+// panic-level pullback. Deeper zones are rarer and historically offer
+// a bigger long-term discount, at the cost of being harder to time.
 
 float initialAccumulationZone =
      centralBandLower - weeklyATR * initialZoneATR
@@ -685,13 +716,21 @@ bool basicTechnicalFilter =
      confluenceCondition
 
 //=====================================================================
-// Accumulation signals
+// Buy signals
 //=====================================================================
 
 // If reclaim confirmation is selected, the signal appears when price
-// crosses back above the relevant band.
+// crosses back above the relevant zone (buyers have stepped back in).
 //
-// Otherwise, the signal appears when price trades inside or below it.
+// Otherwise, the signal appears the moment price trades inside or
+// below the zone (earlier, but less confirmed).
+//
+// The deepest zone (Zone 3 / "BUY+++") intentionally ignores the
+// trend and confluence filters and only requires a stable composite.
+// This is deliberate: a genuine panic-level flush is exactly the kind
+// of long-term buying opportunity that a trend filter would otherwise
+// block, since the 40-week MA and confluence count often turn
+// negative right as the best deep-discount entries appear.
 
 bool normalAccumulationSignal =
      confirmationOnReclaim
@@ -797,16 +836,16 @@ fill(
      color = showCentralBandFill
          ? color.new(color.blue, 88)
          : na,
-     title = "Central AVWAP Accumulation Band"
+     title = "Central AVWAP Fair-Value Band"
 )
 
 //=====================================================================
-// Plot ATR accumulation zones
+// Plot ATR buy zones
 //=====================================================================
 
 plot(
      showATRZones ? initialAccumulationZone : na,
-     title = "Initial Accumulation Zone",
+     title = "Zone 1 - Mild Pullback",
      color = color.new(color.yellow, 20),
      linewidth = 1,
      style = plot.style_linebr
@@ -814,7 +853,7 @@ plot(
 
 plot(
      showATRZones ? strongAccumulationZone : na,
-     title = "Strong Accumulation Zone",
+     title = "Zone 2 - Strong Pullback",
      color = color.new(color.orange, 10),
      linewidth = 2,
      style = plot.style_linebr
@@ -822,7 +861,7 @@ plot(
 
 plot(
      showATRZones ? deepAccumulationZone : na,
-     title = "Deep Accumulation Zone",
+     title = "Zone 3 - Deep / Panic Pullback",
      color = color.new(color.red, 5),
      linewidth = 2,
      style = plot.style_linebr
@@ -840,13 +879,14 @@ plot(
 )
 
 //=====================================================================
-// Plot accumulation markers
+// Plot buy signal markers
 //=====================================================================
+// More "+" symbols = a deeper, rarer discount off the 4-year composite.
 
 plotshape(
      showNormalSignal,
-     title = "Central Band Reclaim",
-     text = "A1",
+     title = "BUY - Central Band Reclaim (mildest)",
+     text = "BUY",
      style = shape.labelup,
      location = location.belowbar,
      color = color.new(color.aqua, 0),
@@ -856,8 +896,8 @@ plotshape(
 
 plotshape(
      showInitialSignal,
-     title = "Initial Zone Reclaim",
-     text = "A2",
+     title = "BUY+ - Zone 1 Reclaim (mild pullback)",
+     text = "BUY+",
      style = shape.labelup,
      location = location.belowbar,
      color = color.new(color.yellow, 0),
@@ -867,8 +907,8 @@ plotshape(
 
 plotshape(
      showStrongSignal,
-     title = "Strong Zone Reclaim",
-     text = "A3",
+     title = "BUY++ - Zone 2 Reclaim (strong pullback)",
+     text = "BUY++",
      style = shape.labelup,
      location = location.belowbar,
      color = color.new(color.orange, 0),
@@ -878,8 +918,8 @@ plotshape(
 
 plotshape(
      showDeepSignal,
-     title = "Deep Zone Reclaim",
-     text = "A4",
+     title = "BUY+++ - Zone 3 Reclaim (deep / panic pullback)",
+     text = "BUY+++",
      style = shape.labelup,
      location = location.belowbar,
      color = color.new(color.red, 0),
@@ -902,29 +942,78 @@ bgcolor(
 )
 
 //=====================================================================
+// Status table (plain-English summary in the corner of the chart)
+//=====================================================================
+
+string currentZoneLabel =
+     close > centralBandUpper ? "Above fair value" :
+     close > centralBandLower ? "Inside fair-value band" :
+     close > initialAccumulationZone ? "Zone 1 - Mild pullback" :
+     close > strongAccumulationZone ? "Zone 2 - Strong pullback" :
+     close > deepAccumulationZone ? "Zone 3 - Deep pullback" :
+     "Below Zone 3 - Extreme"
+
+string trendStatusLabel = weeklyMARising ? "Rising (healthy)" : "Falling (caution)"
+color trendStatusColor = weeklyMARising ? color.lime : color.red
+
+string compositeStatusLabel =
+     compositeRising ? "Rising" : compositeFalling ? "Falling" : "Flat"
+color compositeStatusColor =
+     compositeRising ? color.lime : compositeFalling ? color.red : color.fuchsia
+
+string filterStatusLabel = basicTechnicalFilter ? "Passing" : "Blocked"
+color filterStatusColor = basicTechnicalFilter ? color.lime : color.gray
+
+var table statusTable = table.new(
+     position.top_right,
+     2,
+     6,
+     border_width = 1
+)
+
+if showStatusTable and barstate.islast
+    table.cell(statusTable, 0, 0, "4Y AVWAP Status", text_color = color.white, bgcolor = color.new(color.black, 0), text_size = size.small)
+    table.cell(statusTable, 1, 0, "", bgcolor = color.new(color.black, 0))
+
+    table.cell(statusTable, 0, 1, "Price Zone", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 1, 1, currentZoneLabel, text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+
+    table.cell(statusTable, 0, 2, "40W MA Trend", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 1, 2, trendStatusLabel, text_color = trendStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
+
+    table.cell(statusTable, 0, 3, "Composite Trend", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 1, 3, compositeStatusLabel, text_color = compositeStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
+
+    table.cell(statusTable, 0, 4, "AVWAP Confluence", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 1, 4, str.tostring(confluenceCount) + " of 4 nearby", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+
+    table.cell(statusTable, 0, 5, "Signal Filter", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
+    table.cell(statusTable, 1, 5, filterStatusLabel, text_color = filterStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
+
+//=====================================================================
 // Alerts
 //=====================================================================
 
 alertcondition(
      showNormalSignal,
-     title = "Central AVWAP Band Reclaim",
-     message = "Price reclaimed the central AVWAP accumulation band."
+     title = "BUY - Central AVWAP Band Reclaim",
+     message = "BUY signal (mildest): price reclaimed the central 4-year AVWAP band."
 )
 
 alertcondition(
      showInitialSignal,
-     title = "Initial Accumulation Zone Reclaim",
-     message = "Price reclaimed the initial AVWAP accumulation zone."
+     title = "BUY+ - Zone 1 Reclaim (Mild Pullback)",
+     message = "BUY+ signal: price reclaimed Zone 1, a mild pullback below the 4-year AVWAP band."
 )
 
 alertcondition(
      showStrongSignal,
-     title = "Strong Accumulation Zone Reclaim",
-     message = "Price reclaimed the strong AVWAP accumulation zone."
+     title = "BUY++ - Zone 2 Reclaim (Strong Pullback)",
+     message = "BUY++ signal: price reclaimed Zone 2, a strong pullback below the 4-year AVWAP band."
 )
 
 alertcondition(
      showDeepSignal,
-     title = "Deep Accumulation Zone Reclaim",
-     message = "Price reclaimed the deep AVWAP accumulation zone."
+     title = "BUY+++ - Zone 3 Reclaim (Deep / Panic Pullback)",
+     message = "BUY+++ signal: price reclaimed Zone 3, a deep/panic-level pullback below the 4-year AVWAP band."
 )
