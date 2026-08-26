@@ -1,11 +1,10 @@
-//@version=6
+/@version=6
 //=====================================================================
 // HOW TO READ THIS CHART
 //=====================================================================
 //
 // This is a pure "value for money" gauge for monthly SIP investing -
-// no buy/sell signals, no labels, no table. Just lines plus a
-// background tint:
+// designed for fundamentally strong stocks / ETFs.
 //
 //   - The two thick lines (and the band between them) mark the
 //     4-year AVWAP fair-value zone, built from where price bottomed
@@ -18,16 +17,20 @@
 //     value, and stays neutral/untinted at or above fair value.
 //     Darker green = a better price to buy at this month.
 //
-// Use it the same way on each of your ETFs on your SIP date: no
-// tint or light tint = pay full price as usual; the deeper the green,
-// the more of a discount you're being offered, and the more you may
-// want to lean into that ETF's allocation that month.
+// SIP ALLOCATION (shown in the table):
+//   Recommended % of your planned SIP budget for this ticker =
+//       55% + (Value Score Ã 45%)
+//   â ranges from 55% (expensive) to 100% (deep discount)
+//   Never exceeds 100% of the planned budget.
+//
+// Use it on your SIP date: look at the table for the exact %
+// of budget to deploy into that strong stock/ETF this month.
 //
 //=====================================================================
 
 indicator(
-     title = "4-Year AVWAP Value-For-Money Zones",
-     shorttitle = "4Y AVWAP Value",
+     title = "4-Year AVWAP Value-For-Money Zones + SIP %",
+     shorttitle = "4Y AVWAP SIP",
      overlay = true
 )
 
@@ -39,6 +42,7 @@ string avwapGroup = "1. AVWAP Settings"
 string weightGroup = "2. Recency Weighting"
 string zoneGroup = "3. Reference Zones"
 string appearanceGroup = "4. Appearance"
+string sipGroup = "5. SIP Allocation"
 
 //=====================================================================
 // AVWAP settings
@@ -241,6 +245,43 @@ int compositeLineWidth = input.int(
      minval = 2,
      maxval = 6,
      group = appearanceGroup
+)
+
+//=====================================================================
+// SIP Allocation settings
+//=====================================================================
+
+bool showSipTable = input.bool(
+     true,
+     title = "Show SIP Allocation Table",
+     group = sipGroup
+)
+
+float minSipPct = input.float(
+     55.0,
+     title = "Min SIP % (at Fair Value)",
+     minval = 0.0,
+     maxval = 100.0,
+     step = 1.0,
+     tooltip = "Percentage of planned SIP budget to use when price is at or above fair value.",
+     group = sipGroup
+)
+
+float maxSipPct = input.float(
+     100.0,
+     title = "Max SIP % (at Deep Discount)",
+     minval = 0.0,
+     maxval = 100.0,
+     step = 1.0,
+     tooltip = "Percentage of planned SIP budget to use at Zone 3 depth. Never exceeds 100%.",
+     group = sipGroup
+)
+
+string tablePosition = input.string(
+     "Top Right",
+     title = "Table Position",
+     options = ["Top Left", "Top Right", "Bottom Left", "Bottom Right"],
+     group = sipGroup
 )
 
 //=====================================================================
@@ -591,6 +632,17 @@ float valueScore =
          : math.max(0.0, math.min(1.0, rawDiscountDepth))
 
 //=====================================================================
+// SIP recommended percentage (capped at 100%)
+//=====================================================================
+
+// Linear: minSipPct + valueScore * (maxSipPct - minSipPct)
+// Default: 55% + valueScore * 45%  â  55% â¦ 100%
+
+float sipRange = math.max(0.0, maxSipPct - minSipPct)
+float recommendedSipPct =
+     math.min(100.0, minSipPct + valueScore * sipRange)
+
+//=====================================================================
 // Plot individual yearly AVWAPs
 //=====================================================================
 
@@ -707,3 +759,48 @@ bgcolor(
      valueBackground,
      title = "Value-For-Money Tint"
 )
+
+//=====================================================================
+// SIP Allocation Table
+//=====================================================================
+
+var table sipTable = na
+
+if showSipTable and barstate.islast
+    // Determine table position
+    string pos =
+         tablePosition == "Top Left"     ? position.top_left :
+         tablePosition == "Top Right"    ? position.top_right :
+         tablePosition == "Bottom Left"  ? position.bottom_left :
+                                           position.bottom_right
+
+    if na(sipTable)
+        sipTable := table.new(pos, 2, 4, bgcolor = color.new(color.black, 15), border_width = 1, border_color = color.gray)
+
+    // Header
+    table.cell(sipTable, 0, 0, "SIP VALUE GAUGE", text_color = color.white, text_size = size.small, bgcolor = color.new(color.teal, 30))
+    table.cell(sipTable, 1, 0, "", bgcolor = color.new(color.teal, 30))
+
+    // Value Score
+    table.cell(sipTable, 0, 1, "Value Score", text_color = color.silver, text_size = size.normal)
+    table.cell(sipTable, 1, 1, str.tostring(valueScore, "#.##"), text_color = color.white, text_size = size.normal)
+
+    // Recommended %
+    color pctColor =
+         recommendedSipPct >= 95 ? color.lime :
+         recommendedSipPct >= 80 ? color.green :
+         recommendedSipPct >= 65 ? color.yellow :
+                                   color.orange
+
+    table.cell(sipTable, 0, 2, "Suggested SIP", text_color = color.silver, text_size = size.normal)
+    table.cell(sipTable, 1, 2, str.tostring(recommendedSipPct, "#.#") + "%", text_color = pctColor, text_size = size.large)
+
+    // Interpretation line
+    string zoneText =
+         valueScore >= 0.70 ? "Deep Discount â Full amount" :
+         valueScore >= 0.45 ? "Strong Discount â High allocation" :
+         valueScore >= 0.20 ? "Mild Discount â Moderate allocation" :
+                              "Fair / Expensive â Reduced allocation"
+
+    table.cell(sipTable, 0, 3, zoneText, text_color = color.gray, text_size = size.tiny, bgcolor = color.new(color.black, 40))
+    table.merge_cells(sipTable, 0, 3, 1, 3)
