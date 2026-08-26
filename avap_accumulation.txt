@@ -1,45 +1,33 @@
 //@version=6
 //=====================================================================
-// HOW TO READ THE SIGNALS
+// HOW TO READ THIS CHART
 //=====================================================================
 //
-// Each signal fires purely from price location relative to the 4-year
-// AVWAP zones - there is no trend or confluence filter gating them
-// anymore. A signal appears when price dips into a zone below the
-// fair-value band and closes back above it (or, if reclaim
-// confirmation is turned off, the moment price simply trades inside
-// the zone). Think of the four signals as a ladder of discount depth,
-// not a ranking of reliability:
+// This is a pure "value for money" gauge for monthly SIP investing -
+// no buy/sell signals, no labels, no table. Just lines plus a
+// background tint:
 //
-//   BUY      - price briefly dipped below the fair-value band itself
-//              and reclaimed it. The most common signal - a shallow
-//              dip.
+//   - The two thick lines (and the band between them) mark the
+//     4-year AVWAP fair-value zone, built from where price bottomed
+//     in each of the last 4 calendar years.
+//   - The three thinner lines below the band are reference distances
+//     (in weekly ATR) - Zone 1 (mild), Zone 2 (strong), Zone 3
+//     (deep) discounts below fair value.
+//   - The background tint is the actual "value for money" read:
+//     it shades toward green the further price sits below fair
+//     value, and stays neutral/untinted at or above fair value.
+//     Darker green = a better price to buy at this month.
 //
-//   BUY+     - a real pullback (Zone 1, ~0.5x weekly ATR below fair
-//              value) that got bought back up. Moderate discount.
-//
-//   BUY++    - a stronger pullback (Zone 2, ~1x ATR below). Less
-//              frequent, bigger discount.
-//
-//   BUY+++   - a deep, panic-level flush (Zone 3, ~1.5x ATR below)
-//              that got reclaimed. Rare, and historically the best
-//              long-term entry price - but also the scariest to buy
-//              into, since it often happens right when sentiment is
-//              worst.
-//
-// More "+" symbols means a deeper discount, not a more reliable
-// signal - accumulation here is purely a function of how far price
-// has fallen toward (or into) a zone, independent of trend.
-//
-// The 40-week MA trend, composite trend, and AVWAP confluence count
-// are still shown in the status table for context, but as of this
-// version they no longer block or filter any signal.
+// Use it the same way on each of your ETFs on your SIP date: no
+// tint or light tint = pay full price as usual; the deeper the green,
+// the more of a discount you're being offered, and the more you may
+// want to lean into that ETF's allocation that month.
 //
 //=====================================================================
 
 indicator(
-     title = "4-Year AVWAP Long-Term Buy Zones",
-     shorttitle = "4Y AVWAP Buy Zones",
+     title = "4-Year AVWAP Value-For-Money Zones",
+     shorttitle = "4Y AVWAP Value",
      overlay = true
 )
 
@@ -49,10 +37,8 @@ indicator(
 
 string avwapGroup = "1. AVWAP Settings"
 string weightGroup = "2. Recency Weighting"
-string zoneGroup = "3. Buy Zones (Accumulation)"
-string infoGroup = "4. Trend Info (display only)"
-string signalGroup = "5. Buy Signals"
-string appearanceGroup = "6. Appearance"
+string zoneGroup = "3. Reference Zones"
+string appearanceGroup = "4. Appearance"
 
 //=====================================================================
 // AVWAP settings
@@ -101,7 +87,7 @@ float weightThreeYearsAgo = input.float(
 )
 
 //=====================================================================
-// Accumulation-zone settings
+// Reference zone settings
 //=====================================================================
 
 int weeklyATRLength = input.int(
@@ -113,16 +99,16 @@ int weeklyATRLength = input.int(
 
 float initialZoneATR = input.float(
      0.5,
-     title = "Zone 1 Distance (Mild Pullback)",
+     title = "Zone 1 Distance (Mild Discount)",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. This is the shallowest, most common buy zone.",
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
      group = zoneGroup
 )
 
 float strongZoneATR = input.float(
      1.0,
-     title = "Zone 2 Distance (Strong Pullback)",
+     title = "Zone 2 Distance (Strong Discount)",
      minval = 0.1,
      step = 0.1,
      tooltip = "Distance below the central AVWAP band, measured in weekly ATR.",
@@ -131,57 +117,11 @@ float strongZoneATR = input.float(
 
 float deepZoneATR = input.float(
      1.5,
-     title = "Zone 3 Distance (Deep / Panic Pullback)",
+     title = "Zone 3 Distance (Deep Discount)",
      minval = 0.1,
      step = 0.1,
-     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. This is the rarest, deepest discount zone.",
+     tooltip = "Distance below the central AVWAP band, measured in weekly ATR. The background reaches full color intensity at this depth.",
      group = zoneGroup
-)
-
-float confluenceDistanceATR = input.float(
-     0.5,
-     title = "AVWAP Confluence Distance",
-     minval = 0.1,
-     step = 0.1,
-     tooltip = "An individual yearly AVWAP counts as 'nearby' when price is within this many weekly ATRs of it. Shown in the status table for context only - no longer required for a signal.",
-     group = zoneGroup
-)
-
-//=====================================================================
-// Trend info settings (display only - no longer filters signals)
-//=====================================================================
-
-int weeklyMALength = input.int(
-     40,
-     title = "Weekly Moving Average Length",
-     minval = 1,
-     group = infoGroup
-)
-
-int slopeLookbackWeeks = input.int(
-     4,
-     title = "Composite Slope Lookback",
-     minval = 1,
-     tooltip = "Compares the current composite with its value this many weekly bars ago.",
-     group = infoGroup
-)
-
-//=====================================================================
-// Signal settings
-//=====================================================================
-
-bool showAccumulationSignals = input.bool(
-     true,
-     title = "Show Buy Signal Markers",
-     tooltip = "Marks buying opportunities purely by price location: a pullback into an accumulation zone followed by a reclaim. More '+' symbols = a deeper, rarer discount. No trend filter is applied.",
-     group = signalGroup
-)
-
-bool confirmationOnReclaim = input.bool(
-     true,
-     title = "Use Band Reclaim Confirmation",
-     tooltip = "Signals appear after price closes back above a zone, confirming buyers have stepped back in, rather than the moment price first dips into it.",
-     group = signalGroup
 )
 
 //=====================================================================
@@ -206,9 +146,9 @@ bool showCentralBandFill = input.bool(
      group = appearanceGroup
 )
 
-bool showATRZones = input.bool(
+bool showReferenceZones = input.bool(
      true,
-     title = "Show Weekly ATR Zones",
+     title = "Show Zone Reference Lines",
      group = appearanceGroup
 )
 
@@ -218,16 +158,16 @@ bool showWeeklyMA = input.bool(
      group = appearanceGroup
 )
 
-bool colorCompositeBySlope = input.bool(
-     true,
-     title = "Color Main Composite by Slope",
+int weeklyMALength = input.int(
+     40,
+     title = "Weekly Moving Average Length",
+     minval = 1,
      group = appearanceGroup
 )
 
-bool showStatusTable = input.bool(
+bool showValueBackground = input.bool(
      true,
-     title = "Show Status Table",
-     tooltip = "Shows a plain-English summary in the corner of the chart: which zone price is currently in, trend context, and how many yearly AVWAPs are nearby.",
+     title = "Show Value-For-Money Background Tint",
      group = appearanceGroup
 )
 
@@ -255,21 +195,9 @@ color colorThreeYearsAgo = input.color(
      group = appearanceGroup
 )
 
-color colorRisingComposite = input.color(
-     color.lime,
-     title = "Rising Composite",
-     group = appearanceGroup
-)
-
-color colorFallingComposite = input.color(
-     color.red,
-     title = "Falling Composite",
-     group = appearanceGroup
-)
-
-color colorFlatComposite = input.color(
-     color.fuchsia,
-     title = "Stable Composite",
+color colorWeightedComposite = input.color(
+     color.aqua,
+     title = "Recency-Weighted Composite",
      group = appearanceGroup
 )
 
@@ -282,6 +210,20 @@ color colorEqualComposite = input.color(
 color colorWeeklyMA = input.color(
      color.yellow,
      title = "40-Week Moving Average",
+     group = appearanceGroup
+)
+
+color colorExpensiveTint = input.color(
+     color.new(color.gray, 100),
+     title = "Tint at/above Fair Value",
+     tooltip = "Background color when price is at or above fair value - default is fully transparent (no tint).",
+     group = appearanceGroup
+)
+
+color colorBestValueTint = input.color(
+     color.new(color.green, 55),
+     title = "Tint at Deepest Discount",
+     tooltip = "Background color once price reaches Zone 3 depth - the strongest 'good value' tint.",
      group = appearanceGroup
 )
 
@@ -331,13 +273,12 @@ float previousCumulativeVolume =
 // Track each calendar year's running low (causal, no future leakage)
 //=====================================================================
 
-// This keeps a running lowest-low for whichever calendar year each
-// bar belongs to, updating only with information available at that
-// bar - no request.security lookahead is used anywhere in this
-// script. For completed years the running low freezes at the year's
-// true low once the year ends. For the in-progress year, the anchor
-// can still move forward live as new lows print - that is expected
-// behavior (the AVWAP "follows" the year's lowest point so far), not
+// Keeps a running lowest-low for whichever calendar year each bar
+// belongs to, updating only with information available at that bar -
+// no request.security lookahead is used anywhere in this script. For
+// completed years the running low freezes at the year's true low
+// once the year ends. For the in-progress year, the anchor can still
+// move forward live as new lows print - that is expected, not
 // repainting, since no future data is ever used.
 
 var float yearRunningLow = na
@@ -587,22 +528,14 @@ float equalWeightAVWAP =
          : na
 
 //=====================================================================
-// Central accumulation band
+// Central fair-value band
 //=====================================================================
-
-// The region between the recency-weighted composite and equal-weight
-// composite is treated as the central "fair value" band. Price above
-// this band is trading rich relative to 4 years of accumulated buying;
-// price below it is where buy zones 1-3 are measured from.
 
 float centralBandUpper =
      math.max(weightedAverageAVWAP, equalWeightAVWAP)
 
 float centralBandLower =
      math.min(weightedAverageAVWAP, equalWeightAVWAP)
-
-float centralBandMidpoint =
-     (centralBandUpper + centralBandLower) / 2.0
 
 //=====================================================================
 // Weekly ATR and weekly moving average
@@ -624,22 +557,9 @@ float weeklyMA = request.security(
      lookahead = barmerge.lookahead_off
 )
 
-float weeklyMAPrevious = request.security(
-     syminfo.tickerid,
-     "W",
-     ta.sma(close, weeklyMALength)[1],
-     gaps = barmerge.gaps_off,
-     lookahead = barmerge.lookahead_off
-)
-
 //=====================================================================
-// ATR-based accumulation ("buy") zones
+// Reference discount-zone lines
 //=====================================================================
-
-// Zones are measured underneath the lower edge of the central band.
-// Zone 1 = mild pullback, Zone 2 = strong pullback, Zone 3 = deep /
-// panic-level pullback. Deeper zones are rarer and historically offer
-// a bigger long-term discount, at the cost of being harder to time.
 
 float initialAccumulationZone =
      centralBandLower - weeklyATR * initialZoneATR
@@ -651,108 +571,24 @@ float deepAccumulationZone =
      centralBandLower - weeklyATR * deepZoneATR
 
 //=====================================================================
-// Composite and moving-average slopes (display context only)
+// Value-for-money score
 //=====================================================================
 
-float weeklyComposite = request.security(
-     syminfo.tickerid,
-     "W",
-     weightedAverageAVWAP,
-     gaps = barmerge.gaps_off,
-     lookahead = barmerge.lookahead_off
-)
+// 0.0  = price at or above fair value (no discount)
+// 1.0  = price has fallen exactly to Zone 3 depth (deepest discount)
+// Values are clamped to [0, 1] purely for the background gradient;
+// price can still fall further below Zone 3, it just keeps the
+// strongest tint rather than getting darker still.
 
-float compositeSlope =
-     weeklyComposite - weeklyComposite[slopeLookbackWeeks]
+float rawDiscountDepth =
+     (not na(weeklyATR) and weeklyATR > 0.0 and not na(centralBandLower))
+         ? (centralBandLower - close) / (weeklyATR * deepZoneATR)
+         : na
 
-bool compositeRising = compositeSlope > 0.0
-bool compositeFalling = compositeSlope < 0.0
-
-bool weeklyMARising =
-     not na(weeklyMAPrevious) and weeklyMA >= weeklyMAPrevious
-
-color mainCompositeColor =
-     not colorCompositeBySlope
-         ? colorFlatComposite
-         : compositeRising
-             ? colorRisingComposite
-             : compositeFalling
-                 ? colorFallingComposite
-                 : colorFlatComposite
-
-//=====================================================================
-// AVWAP confluence count (display context only)
-//=====================================================================
-
-float confluenceDistance =
-     weeklyATR * confluenceDistanceATR
-
-bool currentAVWAPNearby =
-     not na(avwapCurrentYear) and
-     math.abs(close - avwapCurrentYear) <= confluenceDistance
-
-bool previousAVWAPNearby =
-     not na(avwapPreviousYear) and
-     math.abs(close - avwapPreviousYear) <= confluenceDistance
-
-bool twoYearAVWAPNearby =
-     not na(avwapTwoYearsAgo) and
-     math.abs(close - avwapTwoYearsAgo) <= confluenceDistance
-
-bool threeYearAVWAPNearby =
-     not na(avwapThreeYearsAgo) and
-     math.abs(close - avwapThreeYearsAgo) <= confluenceDistance
-
-int confluenceCount =
-     (currentAVWAPNearby ? 1 : 0) +
-     (previousAVWAPNearby ? 1 : 0) +
-     (twoYearAVWAPNearby ? 1 : 0) +
-     (threeYearAVWAPNearby ? 1 : 0)
-
-//=====================================================================
-// Buy signals - driven purely by price location relative to zones.
-// No trend, composite, or confluence condition is required anymore.
-//=====================================================================
-
-// If reclaim confirmation is selected, the signal appears when price
-// crosses back above the relevant zone (buyers have stepped back in).
-//
-// Otherwise, the signal appears the moment price trades inside or
-// below the zone (earlier, but less confirmed).
-
-bool normalAccumulationSignal =
-     confirmationOnReclaim
-         ? ta.crossover(close, centralBandLower)
-         : close <= centralBandLower and close > initialAccumulationZone
-
-bool initialAccumulationSignal =
-     confirmationOnReclaim
-         ? ta.crossover(close, initialAccumulationZone)
-         : close <= initialAccumulationZone and
-           close > strongAccumulationZone
-
-bool strongAccumulationSignal =
-     confirmationOnReclaim
-         ? ta.crossover(close, strongAccumulationZone)
-         : close <= strongAccumulationZone and
-           close > deepAccumulationZone
-
-bool deepAccumulationSignal =
-     confirmationOnReclaim
-         ? ta.crossover(close, deepAccumulationZone)
-         : close <= deepAccumulationZone
-
-bool showNormalSignal =
-     showAccumulationSignals and normalAccumulationSignal
-
-bool showInitialSignal =
-     showAccumulationSignals and initialAccumulationSignal
-
-bool showStrongSignal =
-     showAccumulationSignals and strongAccumulationSignal
-
-bool showDeepSignal =
-     showAccumulationSignals and deepAccumulationSignal
+float valueScore =
+     na(rawDiscountDepth)
+         ? 0.0
+         : math.max(0.0, math.min(1.0, rawDiscountDepth))
 
 //=====================================================================
 // Plot individual yearly AVWAPs
@@ -797,7 +633,7 @@ plot(
 weightedCompositePlot = plot(
      weightedAverageAVWAP,
      title = "Recency-Weighted AVWAP Composite",
-     color = mainCompositeColor,
+     color = colorWeightedComposite,
      linewidth = compositeLineWidth,
      style = plot.style_linebr
 )
@@ -820,28 +656,28 @@ fill(
 )
 
 //=====================================================================
-// Plot ATR buy zones
+// Plot discount-zone reference lines
 //=====================================================================
 
 plot(
-     showATRZones ? initialAccumulationZone : na,
-     title = "Zone 1 - Mild Pullback",
+     showReferenceZones ? initialAccumulationZone : na,
+     title = "Zone 1 - Mild Discount",
      color = color.new(color.yellow, 20),
      linewidth = 1,
      style = plot.style_linebr
 )
 
 plot(
-     showATRZones ? strongAccumulationZone : na,
-     title = "Zone 2 - Strong Pullback",
+     showReferenceZones ? strongAccumulationZone : na,
+     title = "Zone 2 - Strong Discount",
      color = color.new(color.orange, 10),
      linewidth = 2,
      style = plot.style_linebr
 )
 
 plot(
-     showATRZones ? deepAccumulationZone : na,
-     title = "Zone 3 - Deep / Panic Pullback",
+     showReferenceZones ? deepAccumulationZone : na,
+     title = "Zone 3 - Deep Discount",
      color = color.new(color.red, 5),
      linewidth = 2,
      style = plot.style_linebr
@@ -859,135 +695,15 @@ plot(
 )
 
 //=====================================================================
-// Plot buy signal markers
-//=====================================================================
-// More "+" symbols = a deeper, rarer discount off the 4-year composite.
-
-plotshape(
-     showNormalSignal,
-     title = "BUY - Central Band Reclaim (mildest)",
-     text = "BUY",
-     style = shape.labelup,
-     location = location.belowbar,
-     color = color.new(color.aqua, 0),
-     textcolor = color.black,
-     size = size.tiny
-)
-
-plotshape(
-     showInitialSignal,
-     title = "BUY+ - Zone 1 Reclaim (mild pullback)",
-     text = "BUY+",
-     style = shape.labelup,
-     location = location.belowbar,
-     color = color.new(color.yellow, 0),
-     textcolor = color.black,
-     size = size.tiny
-)
-
-plotshape(
-     showStrongSignal,
-     title = "BUY++ - Zone 2 Reclaim (strong pullback)",
-     text = "BUY++",
-     style = shape.labelup,
-     location = location.belowbar,
-     color = color.new(color.orange, 0),
-     textcolor = color.black,
-     size = size.tiny
-)
-
-plotshape(
-     showDeepSignal,
-     title = "BUY+++ - Zone 3 Reclaim (deep / panic pullback)",
-     text = "BUY+++",
-     style = shape.labelup,
-     location = location.belowbar,
-     color = color.new(color.red, 0),
-     textcolor = color.white,
-     size = size.tiny
-)
-
-//=====================================================================
-// Optional background for strong AVWAP confluence (display only)
+// Value-for-money background tint
 //=====================================================================
 
-color confluenceBackground =
-     confluenceCount >= 3
-         ? color.new(color.teal, 90)
+color valueBackground =
+     showValueBackground
+         ? color.from_gradient(valueScore, 0.0, 1.0, colorExpensiveTint, colorBestValueTint)
          : na
 
 bgcolor(
-     confluenceBackground,
-     title = "Strong AVWAP Confluence"
-)
-
-//=====================================================================
-// Status table (plain-English summary in the corner of the chart)
-//=====================================================================
-
-string currentZoneLabel =
-     close > centralBandUpper ? "Above fair value" :
-     close > centralBandLower ? "Inside fair-value band" :
-     close > initialAccumulationZone ? "Zone 1 - Mild pullback" :
-     close > strongAccumulationZone ? "Zone 2 - Strong pullback" :
-     close > deepAccumulationZone ? "Zone 3 - Deep pullback" :
-     "Below Zone 3 - Extreme"
-
-string trendStatusLabel = weeklyMARising ? "Rising" : "Falling"
-color trendStatusColor = weeklyMARising ? color.lime : color.red
-
-string compositeStatusLabel =
-     compositeRising ? "Rising" : compositeFalling ? "Falling" : "Flat"
-color compositeStatusColor =
-     compositeRising ? color.lime : compositeFalling ? color.red : color.fuchsia
-
-var table statusTable = table.new(
-     position.top_right,
-     2,
-     5,
-     border_width = 1
-)
-
-if showStatusTable and barstate.islast
-    table.cell(statusTable, 0, 0, "4Y AVWAP Status", text_color = color.white, bgcolor = color.new(color.black, 0), text_size = size.small)
-    table.cell(statusTable, 1, 0, "", bgcolor = color.new(color.black, 0))
-
-    table.cell(statusTable, 0, 1, "Price Zone", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-    table.cell(statusTable, 1, 1, currentZoneLabel, text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-
-    table.cell(statusTable, 0, 2, "40W MA Trend (info)", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-    table.cell(statusTable, 1, 2, trendStatusLabel, text_color = trendStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
-
-    table.cell(statusTable, 0, 3, "Composite Trend (info)", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-    table.cell(statusTable, 1, 3, compositeStatusLabel, text_color = compositeStatusColor, bgcolor = color.new(color.gray, 70), text_size = size.small)
-
-    table.cell(statusTable, 0, 4, "AVWAP Confluence", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-    table.cell(statusTable, 1, 4, str.tostring(confluenceCount) + " of 4 nearby", text_color = color.white, bgcolor = color.new(color.gray, 70), text_size = size.small)
-
-//=====================================================================
-// Alerts
-//=====================================================================
-
-alertcondition(
-     showNormalSignal,
-     title = "BUY - Central AVWAP Band Reclaim",
-     message = "BUY signal (mildest): price reclaimed the central 4-year AVWAP band."
-)
-
-alertcondition(
-     showInitialSignal,
-     title = "BUY+ - Zone 1 Reclaim (Mild Pullback)",
-     message = "BUY+ signal: price reclaimed Zone 1, a mild pullback below the 4-year AVWAP band."
-)
-
-alertcondition(
-     showStrongSignal,
-     title = "BUY++ - Zone 2 Reclaim (Strong Pullback)",
-     message = "BUY++ signal: price reclaimed Zone 2, a strong pullback below the 4-year AVWAP band."
-)
-
-alertcondition(
-     showDeepSignal,
-     title = "BUY+++ - Zone 3 Reclaim (Deep / Panic Pullback)",
-     message = "BUY+++ signal: price reclaimed Zone 3, a deep/panic-level pullback below the 4-year AVWAP band."
+     valueBackground,
+     title = "Value-For-Money Tint"
 )
